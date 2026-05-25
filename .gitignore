@@ -2,11 +2,24 @@
 .venv/
 venv/
 env/
+ENV/
 __pycache__/
-*.py[cod]
+*.py[codz]
+*$py.class
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.coverage
+.coverage.*
+htmlcov/
+
+# Python packaging and build output
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
 
 # Node / frontend build output
 node_modules/
@@ -18,6 +31,7 @@ frontend/.vite/
 .env
 .env.*
 !.env.example
+.envrc
 
 # Local databases, vector stores, and generated AI artifacts
 chroma_db/
@@ -37,6 +51,13 @@ data/chunks/*
 logs/
 tmp/
 temp/
+celerybeat-schedule
+celerybeat.pid
+
+# Documentation and tool output
+docs/_build/
+/site
+tempCodeRunnerFile.py
 
 # OS / editor noise
 .DS_Store
@@ -44,3 +65,4 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+.idea/

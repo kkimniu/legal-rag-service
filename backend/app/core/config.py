@@ -1,0 +1,41 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Environment-driven configuration for local, Docker, and deployed runtime."""
+
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), env_file_encoding="utf-8", extra="ignore")
+
+    app_env: str = "local"
+    app_name: str = "legal-rag-service"
+    api_v1_prefix: str = "/api/v1"
+    backend_cors_origins: str = "http://localhost:5173"
+
+    database_url: str = "postgresql+psycopg://legal_rag:legal_rag_password@localhost:5432/legal_rag"
+
+    jwt_secret_key: str = Field(default="change-me", min_length=8)
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60
+
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4.1-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
+    chroma_persist_directory: str = "./chroma_db"
+    rag_top_k: int = 5
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse comma-separated origins from env vars without forcing JSON syntax."""
+        return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Cache settings so dependency injection and app startup use the same values."""
+    return Settings()
+
+
+settings = get_settings()

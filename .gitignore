@@ -1,0 +1,46 @@
+# Python virtual environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Local databases, vector stores, and generated AI artifacts
+chroma_db/
+backend/chroma_db/
+ai/chroma_db/
+*.sqlite3
+*.db
+data/raw/*
+data/processed/*
+data/chunks/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/chunks/.gitkeep
+
+# Logs and local runtime files
+*.log
+logs/
+tmp/
+temp/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

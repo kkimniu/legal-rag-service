@@ -5,21 +5,24 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 
 ## 현재 확인된 상태
 
-2026-05-25 기준 로컬 프로젝트에서 확인한 상태입니다.
+2026-05-26 기준 로컬 프로젝트에서 확인한 상태입니다.
 
 | 항목 | 상태 |
 | --- | --- |
 | Git 저장소 | 생성됨 |
 | Python venv | `.venv` 생성됨 |
 | Python 버전 | `3.13.12` |
-| venv pip | 아직 없음 (`No module named pip`) |
+| venv pip | 설치됨 |
+| Backend dependencies | 설치됨 |
 | Node.js | `v24.16.0` |
 | npm | `11.13.0` (`npm.cmd`로 확인) |
-| Frontend node_modules | 아직 없음 |
-| package-lock.json | 아직 없음 |
+| Frontend node_modules | 설치됨 |
+| package-lock.json | 생성됨 |
 | Backend 구조 | 생성됨 |
 | Frontend 구조 | 생성됨 |
 | AI/data/docs 구조 | 생성됨 |
+| Backend health check | `200 {"status": "ok"}` 확인 |
+| Frontend build | `npm.cmd run build` 통과 |
 
 PowerShell 실행 정책 때문에 `npm --version`은 막힐 수 있습니다. Windows에서는 `npm.cmd`를 사용하면 됩니다.
 
@@ -67,7 +70,7 @@ legal-rag-service/
   docs/                 API, 데이터 처리, 배포 문서
 ```
 
-## 설치 순서
+## 초기 설치 순서
 
 1. `.env.example`을 참고해 `.env`를 만듭니다.
 2. Python venv에 `pip`를 준비합니다.
@@ -77,7 +80,7 @@ legal-rag-service/
 
 ## Backend 실행
 
-현재 `.venv`에는 `pip`가 없으므로 먼저 아래 명령으로 `pip`를 준비합니다.
+처음 venv를 만든 직후 `pip`가 없다면 아래 명령으로 준비합니다.
 
 ```powershell
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
@@ -110,6 +113,28 @@ npm.cmd run dev
 실행 후 확인:
 
 - Frontend: `http://localhost:5173`
+
+프로덕션 빌드 확인:
+
+```powershell
+cd frontend
+npm.cmd run build
+```
+
+## 동작 확인
+
+백엔드 health endpoint는 FastAPI `TestClient`로 정상 응답을 확인했습니다.
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -c "from fastapi.testclient import TestClient; from app.main import app; r=TestClient(app).get('/api/v1/health'); print(r.status_code, r.json())"
+```
+
+예상 결과:
+
+```text
+200 {'status': 'ok'}
+```
 
 ## 환경 변수
 
@@ -148,8 +173,8 @@ Frontend:
 
 ## 다음 작업 추천
 
-1. `pip` 설치 후 `backend/requirements.txt` 설치
-2. `frontend`에서 `npm.cmd install` 실행
+1. 루트에 잘못 생성된 `requirements.txt`가 있다면 삭제 또는 정리
+2. 현재 설정 변경사항 커밋
 3. PostgreSQL 로컬 실행 또는 Docker Compose 추가
 4. Alembic 초기화와 첫 마이그레이션 작성
 5. `/api/v1/rag/ask` 엔드포인트 구현

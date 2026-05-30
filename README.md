@@ -99,6 +99,17 @@ cd backend
 
 - API 문서: `http://localhost:8000/docs`
 - Health check: `http://localhost:8000/api/v1/health`
+- RAG ask: `POST http://localhost:8000/api/v1/rag/ask`
+
+RAG endpoint 예시:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/v1/rag/ask `
+  -ContentType "application/json" `
+  -Body '{"question":"임대차 계약 해지는 언제 가능한가요?"}'
+```
 
 ## Frontend 실행
 
@@ -151,6 +162,7 @@ Copy-Item .env.example .env
 - `OPENAI_MODEL`: 답변 생성 모델
 - `OPENAI_EMBEDDING_MODEL`: 임베딩 모델
 - `CHROMA_PERSIST_DIRECTORY`: ChromaDB 저장 경로
+- `CHROMA_COLLECTION_NAME`: ChromaDB 컬렉션 이름
 - `VITE_API_BASE_URL`: 프론트엔드가 호출할 백엔드 API 주소
 
 ## 추천 초기 패키지
@@ -175,11 +187,11 @@ Frontend:
 
 1. 루트에 잘못 생성된 `requirements.txt`가 있다면 삭제 또는 정리
 2. 현재 설정 변경사항 커밋
-3. PostgreSQL 로컬 실행 또는 Docker Compose 추가
-4. Alembic 초기화와 첫 마이그레이션 작성
-5. `/api/v1/rag/ask` 엔드포인트 구현
-6. AI Hub 데이터 전처리 스크립트 추가
-7. ChromaDB 색인 생성 스크립트 추가
+3. `.env`에 실제 `OPENAI_API_KEY` 설정
+4. 샘플 chunk ChromaDB 색인 생성
+5. RAG 검색 결과 기반 생성 답변 연결
+6. PostgreSQL 로컬 실행 또는 Docker Compose 추가
+7. Alembic 초기화와 첫 마이그레이션 작성
 
 ## Docker 확장 메모
 

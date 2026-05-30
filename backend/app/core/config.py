@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4.1-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     chroma_persist_directory: str = "./chroma_db"
+    chroma_collection_name: str = "legal_chunks"
     rag_top_k: int = 5
 
     @property

@@ -302,7 +302,7 @@ cd backend
 답변 품질 평가:
 
 ```powershell
-.\.venv\Scripts\python.exe ai\rag\evaluate_answers.py --use-domain-filter --per-domain-limit 1 --output data\processed\answer_eval.medium.json
+.\.venv\Scripts\python.exe ai\rag\evaluate_answers.py --use-domain-filter --per-domain-limit 2 --output data\processed\answer_eval.medium.8q.json
 ```
 
 답변 평가는 실제 답변 생성 API를 호출하므로 OpenAI 사용량이 발생합니다.
@@ -310,8 +310,10 @@ cd backend
 현재 답변 품질 기준선:
 
 - 분야별 1개씩 총 4개 질문 평가
+- 분야별 2개씩 총 8개 질문 평가
 - basic quality pass rate: 100%
 - 점검 항목: 답변 길이, 근거 수, 면책 문구, 근거 언급, 기대 키워드 포함 여부
+- 결과 항목: 전체/분야별 통과율, 평균 답변 길이, 평균 근거 수, 실패 사유
 - 프롬프트는 근거에 없는 법률요건이나 일반론을 추측하지 않도록 제한
 
 ## 다음 작업

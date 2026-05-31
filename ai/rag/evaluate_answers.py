@@ -89,6 +89,19 @@ def evaluate_answer(item: dict[str, Any], response: dict[str, Any]) -> dict[str,
     source_domains = [str(source.get("domain_name") or "") for source in sources]
     has_disclaimer = any(token in answer for token in ("참고 정보", "참고정보", "법률 자문", "전문가 상담"))
     mentions_evidence = any(token in answer for token in ("근거", "제공된", "검색된", "위 자료"))
+    failure_reasons = []
+    if not response.get("is_ready"):
+        failure_reasons.append("rag_not_ready")
+    if len(answer) < 80:
+        failure_reasons.append("answer_too_short")
+    if len(sources) == 0:
+        failure_reasons.append("no_sources")
+    if not has_disclaimer:
+        failure_reasons.append("missing_disclaimer")
+    if not mentions_evidence:
+        failure_reasons.append("missing_evidence_reference")
+    if not source_term_hits:
+        failure_reasons.append("expected_terms_not_in_sources")
 
     return {
         "id": item.get("id"),
@@ -102,17 +115,40 @@ def evaluate_answer(item: dict[str, Any], response: dict[str, Any]) -> dict[str,
         "mentions_evidence": mentions_evidence,
         "answer_term_hits": answer_term_hits,
         "source_term_hits": source_term_hits,
-        "passes_basic_quality": (
-            bool(response.get("is_ready"))
-            and len(answer) >= 80
-            and len(sources) > 0
-            and has_disclaimer
-            and mentions_evidence
-            and bool(source_term_hits)
-        ),
+        "failure_reasons": failure_reasons,
+        "passes_basic_quality": not failure_reasons,
         "source_domains": source_domains,
         "answer_preview": answer[:500],
     }
+
+
+def summarize_by_domain(results: list[dict[str, Any]]) -> dict[str, dict[str, int | float]]:
+    per_domain: dict[str, dict[str, int | float]] = {}
+    for result in results:
+        domain_code = str(result["domain_code"])
+        metrics = per_domain.setdefault(
+            domain_code,
+            {
+                "questions": 0,
+                "passed": 0,
+                "failed": 0,
+                "avg_answer_chars": 0,
+                "avg_source_count": 0,
+            },
+        )
+        metrics["questions"] = int(metrics["questions"]) + 1
+        metrics["passed"] = int(metrics["passed"]) + int(bool(result["passes_basic_quality"]))
+        metrics["failed"] = int(metrics["failed"]) + int(not result["passes_basic_quality"])
+        metrics["avg_answer_chars"] = float(metrics["avg_answer_chars"]) + int(result["answer_chars"])
+        metrics["avg_source_count"] = float(metrics["avg_source_count"]) + int(result["source_count"])
+
+    for metrics in per_domain.values():
+        questions = int(metrics["questions"])
+        metrics["pass_rate"] = int(metrics["passed"]) / questions if questions else 0
+        metrics["avg_answer_chars"] = float(metrics["avg_answer_chars"]) / questions if questions else 0
+        metrics["avg_source_count"] = float(metrics["avg_source_count"]) / questions if questions else 0
+
+    return per_domain
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,6 +192,16 @@ def main() -> None:
         "basic_quality_pass_rate": passed / total if total else 0,
         "passed": passed,
         "failed": total - passed,
+        "per_domain": summarize_by_domain(results),
+        "failed_results": [
+            {
+                "id": result["id"],
+                "domain_code": result["domain_code"],
+                "failure_reasons": result["failure_reasons"],
+            }
+            for result in results
+            if not result["passes_basic_quality"]
+        ],
         "results": results,
     }
 

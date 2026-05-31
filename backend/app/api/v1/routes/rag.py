@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -6,7 +6,7 @@ from app.api.deps import get_current_user, get_optional_current_user
 from app.db.session import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.rag import RagAskRequest, RagAskResponse, RagQueryRead
-from app.services.rag_history_service import list_rag_queries, save_rag_query
+from app.services.rag_history_service import delete_rag_query, list_rag_queries, save_rag_query
 from app.services.rag_service import RagService
 
 router = APIRouter()
@@ -47,3 +47,18 @@ def read_rag_history(
         )
         for item in history
     ]
+
+
+@router.delete("/history/{query_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rag_history_item(
+    query_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete one RAG query history item owned by the current user."""
+    deleted = delete_rag_query(db, current_user.id, query_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="RAG query history item was not found.",
+        )

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.models.user import User
 from app.schemas.rag import RagAskResponse, RagSource
-from app.services.rag_history_service import list_rag_queries, save_rag_query
+from app.services.rag_history_service import delete_rag_query, list_rag_queries, save_rag_query
 
 
 def test_save_and_list_rag_query_history(db_session: Session) -> None:
@@ -45,3 +45,29 @@ def test_save_and_list_rag_query_history(db_session: Session) -> None:
     assert history[0].question == "질문입니다."
     assert history[0].answer == "검색 근거에 기반한 답변입니다."
     assert history[0].sources[0]["id"] == "chunk-1"
+
+
+def test_delete_rag_query_only_deletes_owner_history(db_session: Session) -> None:
+    owner = User(
+        email="history-owner@example.com",
+        hashed_password=hash_password("password123"),
+        is_active=True,
+    )
+    other_user = User(
+        email="history-other@example.com",
+        hashed_password=hash_password("password123"),
+        is_active=True,
+    )
+    db_session.add_all([owner, other_user])
+    db_session.commit()
+    db_session.refresh(owner)
+    db_session.refresh(other_user)
+
+    response = RagAskResponse(answer="답변입니다.", is_ready=True, sources=[])
+    saved = save_rag_query(db_session, owner.id, "삭제할 질문입니다.", response)
+
+    assert delete_rag_query(db_session, other_user.id, saved.id) is False
+    assert len(list_rag_queries(db_session, owner.id)) == 1
+
+    assert delete_rag_query(db_session, owner.id, saved.id) is True
+    assert list_rag_queries(db_session, owner.id) == []

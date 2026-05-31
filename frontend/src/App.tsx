@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
-import { askLegalQuestion, fetchRagHistory, type RagAnswer, type RagHistoryItem } from './api/legalQa';
+import { askLegalQuestion, deleteRagHistoryItem, fetchRagHistory, type RagAnswer, type RagHistoryItem } from './api/legalQa';
 
 const initialResult: RagAnswer = {
   answer: '질문을 입력하면 검색된 법률 근거와 생성 답변이 여기에 표시됩니다.',
@@ -72,6 +72,17 @@ export function App() {
       sources: item.sources,
       is_ready: true,
     });
+  }
+
+  async function handleHistoryDelete(item: RagHistoryItem) {
+    const deleted = await deleteRagHistoryItem(item.id);
+    if (!deleted) {
+      return;
+    }
+    setHistory((items) => items.filter((historyItem) => historyItem.id !== item.id));
+    if (result.answer === item.answer && question === item.question) {
+      setResult(initialResult);
+    }
   }
 
   return (
@@ -177,9 +188,12 @@ export function App() {
               <div className="history-list">
                 {history.map((item) => (
                   <article className="history-item" key={item.id}>
-                    <button type="button" onClick={() => handleHistorySelect(item)}>
+                    <button type="button" className="history-open-button" onClick={() => handleHistorySelect(item)}>
                       <span>{item.question}</span>
                       <time>{new Date(item.created_at).toLocaleString('ko-KR')}</time>
+                    </button>
+                    <button type="button" className="history-delete-button" onClick={() => handleHistoryDelete(item)}>
+                      삭제
                     </button>
                   </article>
                 ))}

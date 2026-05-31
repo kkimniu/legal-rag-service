@@ -33,3 +33,18 @@ def list_rag_queries(db: Session, user_id: int, limit: int = 20) -> list[RagQuer
         .limit(limit)
     )
     return list(db.scalars(statement))
+
+
+def delete_rag_query(db: Session, user_id: int, query_id: int) -> bool:
+    """Delete one RAG query if it belongs to the user."""
+    statement = select(RagQuery).where(
+        RagQuery.id == query_id,
+        RagQuery.user_id == user_id,
+    )
+    query = db.scalar(statement)
+    if query is None:
+        return False
+
+    db.delete(query)
+    db.commit()
+    return True

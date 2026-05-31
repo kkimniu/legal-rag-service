@@ -256,7 +256,13 @@ button:disabled {
   padding: 16px;
 }
 
-.history-item button {
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.history-open-button {
   display: grid;
   width: 100%;
   justify-items: start;
@@ -268,9 +274,19 @@ button:disabled {
   text-align: left;
 }
 
-.history-item button:hover {
+.history-open-button:hover {
   border-color: #9fb2c7;
   background: #f9fbfd;
+}
+
+.history-delete-button {
+  align-self: stretch;
+  background: #f8e8e8;
+  color: #8a2f2f;
+}
+
+.history-delete-button:hover {
+  background: #efd2d2;
 }
 
 .history-item span {
@@ -325,6 +341,10 @@ button:disabled {
 
 @media (max-width: 860px) {
   .app-header {
+    grid-template-columns: 1fr;
+  }
+
+  .history-item {
     grid-template-columns: 1fr;
   }
 }

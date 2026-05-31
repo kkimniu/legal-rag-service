@@ -75,3 +75,19 @@ export async function fetchRagHistory(): Promise<RagHistoryItem[]> {
     return [];
   }
 }
+
+export async function deleteRagHistoryItem(id: number): Promise<boolean> {
+  const token = getStoredToken();
+  if (!token) {
+    return false;
+  }
+
+  try {
+    await api.delete(`/rag/history/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}

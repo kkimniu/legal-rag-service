@@ -14,7 +14,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
-| Sample index | `legal_chunks_sample` 컬렉션 1,000개 균형 샘플 색인 확인 |
+| Sample index | `legal_chunks_sample` 1,000개, `legal_chunks_medium` 4,000개 균형 샘플 색인 확인 |
 | Database | PostgreSQL Docker Compose 구성, Alembic 마이그레이션, 인증 API 검증 |
 
 ## 기술 스택
@@ -60,6 +60,12 @@ Copy-Item .env.example .env
 
 ```env
 CHROMA_COLLECTION_NAME=legal_chunks_sample
+```
+
+중간 규모 색인을 사용할 때:
+
+```env
+CHROMA_COLLECTION_NAME=legal_chunks_medium
 ```
 
 ## 로컬 실행
@@ -110,6 +116,25 @@ chunk 샘플 생성:
 
 ```powershell
 .\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.sample.jsonl --collection-name legal_chunks_sample --reset-collection --max-per-domain 250
+```
+
+중간 규모 문서/chunk 생성:
+
+```powershell
+.\.venv\Scripts\python.exe ai\preprocessing\normalize_documents.py --output data\processed\legal_documents.medium.jsonl --max-per-domain 1000
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.medium.jsonl --output data\chunks\legal_chunks.medium.jsonl
+```
+
+중간 규모 ChromaDB 색인:
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.medium.jsonl --collection-name legal_chunks_medium --max-per-domain 1000 --reset-collection
+```
+
+색인 중 OpenAI rate limit이 발생했거나 중간에 끊겼다면 이어서 실행합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.medium.jsonl --collection-name legal_chunks_medium --max-per-domain 1000 --skip-existing --max-retries 8 --retry-base-seconds 3
 ```
 
 ## Docker Compose 실행
@@ -234,10 +259,26 @@ cd backend
 ..\.venv\Scripts\python.exe -m pytest
 ```
 
+## RAG 검색 품질 평가
+
+답변 생성 전에 검색 품질만 먼저 확인하려면 `ai/rag/evaluation_questions.jsonl` 질문 세트를 사용합니다. 이 평가는 답변 LLM 호출 없이 질문 임베딩과 ChromaDB 검색만 실행합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\rag\evaluate_retrieval.py --collection-name legal_chunks_medium --top-k 5
+```
+
+분야 필터 기준으로 비교하려면 아래 명령을 실행합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\rag\evaluate_retrieval.py --collection-name legal_chunks_medium --top-k 5 --use-expected-domain-filter --output data\processed\retrieval_eval.medium.filtered.json
+```
+
+결과는 `data/processed/retrieval_eval.medium.json`에 저장됩니다.
+
 ## 다음 작업
 
-1. 샘플 색인 규모 확대
-2. 전체 데이터 변환 및 전체 ChromaDB 색인
-3. RAG 답변 품질 평가용 테스트셋 작성
+1. 검색 품질 확인 결과를 바탕으로 chunk 크기와 top-k 조정
+2. 답변 품질 평가용 테스트셋 작성
+3. 전체 데이터 변환 및 전체 ChromaDB 색인
 4. 프론트 테스트 코드 추가
 5. 배포 환경용 Docker 설정 분리

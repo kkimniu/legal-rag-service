@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
@@ -110,6 +111,55 @@ def get_embedding_model(model: str) -> OpenAIEmbeddings:
     return OpenAIEmbeddings(model=model, api_key=api_key)
 
 
+def embed_documents_with_retry(
+    embeddings: OpenAIEmbeddings,
+    texts: list[str],
+    max_retries: int,
+    retry_base_seconds: float,
+) -> list[list[float]]:
+    """Retry transient OpenAI embedding failures such as rate limits."""
+    attempt = 0
+    while True:
+        try:
+            return embeddings.embed_documents(texts)
+        except Exception as exc:
+            message = repr(exc).lower()
+            is_retryable = any(token in message for token in ("ratelimit", "rate_limit", "timeout", "temporarily"))
+            if not is_retryable or attempt >= max_retries:
+                raise
+
+            sleep_seconds = retry_base_seconds * (2**attempt)
+            print(f"retryable embedding error; retrying in {sleep_seconds:.1f}s ({attempt + 1}/{max_retries})")
+            time.sleep(sleep_seconds)
+            attempt += 1
+
+
+def filter_existing_chunks(
+    collection: Any,
+    ids: list[str],
+    texts: list[str],
+    metadatas: list[dict[str, METADATA_VALUE]],
+) -> tuple[list[str], list[str], list[dict[str, METADATA_VALUE]], int]:
+    """Remove ids that are already present in Chroma when resuming a failed build."""
+    existing = collection.get(ids=ids, include=[])
+    existing_ids = set(existing.get("ids") or [])
+    if not existing_ids:
+        return ids, texts, metadatas, 0
+
+    filtered_ids: list[str] = []
+    filtered_texts: list[str] = []
+    filtered_metadatas: list[dict[str, METADATA_VALUE]] = []
+
+    for chunk_id, text, metadata in zip(ids, texts, metadatas, strict=True):
+        if chunk_id in existing_ids:
+            continue
+        filtered_ids.append(chunk_id)
+        filtered_texts.append(text)
+        filtered_metadatas.append(metadata)
+
+    return filtered_ids, filtered_texts, filtered_metadatas, len(existing_ids)
+
+
 def build_chroma(
     input_path: Path,
     persist_dir: Path,
@@ -120,6 +170,9 @@ def build_chroma(
     max_per_domain: int | None,
     reset_collection: bool,
     dry_run: bool,
+    max_retries: int,
+    retry_base_seconds: float,
+    skip_existing: bool,
 ) -> dict[str, Any]:
     if not input_path.exists():
         raise FileNotFoundError(f"Chunk JSONL does not exist: {input_path}")
@@ -174,7 +227,18 @@ def build_chroma(
         if collection is None or embeddings is None:
             raise RuntimeError("Chroma collection or embedding model was not initialized.")
 
-        vectors = embeddings.embed_documents(texts)
+        if skip_existing:
+            ids, texts, metadatas, skipped_existing = filter_existing_chunks(collection, ids, texts, metadatas)
+            stats["skipped_existing"] = stats.get("skipped_existing", 0) + skipped_existing
+            if not ids:
+                continue
+
+        vectors = embed_documents_with_retry(
+            embeddings=embeddings,
+            texts=texts,
+            max_retries=max_retries,
+            retry_base_seconds=retry_base_seconds,
+        )
         collection.upsert(ids=ids, documents=texts, metadatas=metadatas, embeddings=vectors)
 
     if not dry_run and collection is not None:
@@ -194,6 +258,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-per-domain", type=int, default=None)
     parser.add_argument("--reset-collection", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--max-retries", type=int, default=5)
+    parser.add_argument("--retry-base-seconds", type=float, default=2.0)
+    parser.add_argument("--skip-existing", action="store_true")
     return parser.parse_args()
 
 
@@ -209,6 +276,9 @@ def main() -> None:
         max_per_domain=args.max_per_domain,
         reset_collection=args.reset_collection,
         dry_run=args.dry_run,
+        max_retries=args.max_retries,
+        retry_base_seconds=args.retry_base_seconds,
+        skip_existing=args.skip_existing,
     )
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 

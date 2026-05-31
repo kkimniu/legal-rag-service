@@ -15,7 +15,7 @@ class RagService:
     def __init__(self, top_k: int | None = None) -> None:
         self.top_k = top_k or settings.rag_top_k
 
-    def answer(self, question: str) -> RagAskResponse:
+    def answer(self, question: str, domain_code: str | None = None) -> RagAskResponse:
         """Retrieve legal chunks and generate a grounded Korean answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
             return RagAskResponse(
@@ -33,7 +33,7 @@ class RagService:
             )
 
         try:
-            sources = self._retrieve_sources(question, persist_directory)
+            sources = self._retrieve_sources(question, persist_directory, domain_code)
         except Exception as exc:
             return RagAskResponse(
                 answer=f"RAG 검색 중 오류가 발생했습니다: {exc}",
@@ -72,7 +72,12 @@ class RagService:
                 return resolved
         return None
 
-    def _retrieve_sources(self, question: str, persist_directory: Path) -> list[RagSource]:
+    def _retrieve_sources(
+        self,
+        question: str,
+        persist_directory: Path,
+        domain_code: str | None = None,
+    ) -> list[RagSource]:
         client = chromadb.PersistentClient(path=str(persist_directory))
         collection = client.get_collection(settings.chroma_collection_name)
         embeddings = OpenAIEmbeddings(
@@ -80,11 +85,15 @@ class RagService:
             api_key=settings.openai_api_key,
         )
         query_embedding = embeddings.embed_query(question)
-        result = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=self.top_k,
-            include=["documents", "metadatas", "distances"],
-        )
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": self.top_k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if domain_code:
+            query_kwargs["where"] = {"domain_code": domain_code}
+
+        result = collection.query(**query_kwargs)
 
         documents = result.get("documents", [[]])[0]
         metadatas = result.get("metadatas", [[]])[0]

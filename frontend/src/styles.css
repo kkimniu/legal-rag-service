@@ -15,6 +15,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -77,6 +78,12 @@ h1 {
   gap: 12px;
 }
 
+.question-controls {
+  display: grid;
+  max-width: 280px;
+  gap: 8px;
+}
+
 label {
   font-weight: 700;
 }
@@ -90,11 +97,13 @@ textarea {
   line-height: 1.5;
 }
 
-input {
+input,
+select {
   width: 100%;
   border: 1px solid #c9d2df;
   border-radius: 6px;
   padding: 10px 12px;
+  background: #ffffff;
 }
 
 button {

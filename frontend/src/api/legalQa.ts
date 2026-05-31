@@ -21,7 +21,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
 
-export async function askLegalQuestion(question: string): Promise<RagAnswer> {
+export async function askLegalQuestion(question: string, domainCode?: string): Promise<RagAnswer> {
   if (!question.trim()) {
     return {
       answer: '질문을 입력하면 RAG 검색 결과와 생성 답변을 표시합니다.',
@@ -34,7 +34,14 @@ export async function askLegalQuestion(question: string): Promise<RagAnswer> {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   try {
-    const response = await api.post<RagAnswer>('/rag/ask', { question }, { headers });
+    const response = await api.post<RagAnswer>(
+      '/rag/ask',
+      {
+        question,
+        domain_code: domainCode || null,
+      },
+      { headers },
+    );
     return response.data;
   } catch {
     return {

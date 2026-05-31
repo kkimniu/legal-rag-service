@@ -8,8 +8,17 @@ const initialResult: RagAnswer = {
   is_ready: false,
 };
 
+const domainOptions = [
+  { value: '', label: '전체 분야' },
+  { value: '01_civil_law', label: '민사법' },
+  { value: '02_intellectual_property_law', label: '지식재산권법' },
+  { value: '03_administrative_law', label: '행정법' },
+  { value: '04_criminal_law', label: '형사법' },
+];
+
 export function App() {
   const [question, setQuestion] = useState('');
+  const [domainCode, setDomainCode] = useState('');
   const [result, setResult] = useState<RagAnswer>(initialResult);
   const [isLoading, setIsLoading] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -30,7 +39,7 @@ export function App() {
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
-    setResult(await askLegalQuestion(question));
+    setResult(await askLegalQuestion(question, domainCode));
     setIsLoading(false);
   }
 
@@ -88,6 +97,16 @@ export function App() {
         </header>
 
         <form className="question-form" onSubmit={handleQuestionSubmit}>
+          <div className="question-controls">
+            <label htmlFor="domain">법 분야</label>
+            <select id="domain" value={domainCode} onChange={(event) => setDomainCode(event.target.value)}>
+              {domainOptions.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <label htmlFor="question">질문</label>
           <textarea
             id="question"

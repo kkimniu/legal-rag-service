@@ -1,0 +1,8 @@
+{"id":"civil_contract_damage","domain_code":"01_civil_law","domain_name":"민사법","question":"계약을 이행하지 않은 상대방에게 손해배상을 청구하려면 어떤 요건을 확인해야 하나요?","expected_terms":["손해배상","채무불이행","책임"]}
+{"id":"civil_repair_liability","domain_code":"01_civil_law","domain_name":"민사법","question":"자동차 수리업자가 수리에 실패했을 때 손해배상 책임이 문제되는 경우 어떤 점을 봐야 하나요?","expected_terms":["수리","손해배상","책임"]}
+{"id":"ip_trademark_similarity","domain_code":"02_intellectual_property_law","domain_name":"지식재산권법","question":"상표가 서로 유사한지 판단할 때 어떤 요소를 고려하나요?","expected_terms":["상표","유사","혼동"]}
+{"id":"ip_patent_infringement","domain_code":"02_intellectual_property_law","domain_name":"지식재산권법","question":"특허권 침해 여부를 판단할 때 청구범위는 왜 중요한가요?","expected_terms":["특허","청구범위","침해"]}
+{"id":"admin_disposition_cancel","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정처분 취소소송에서 처분의 위법성을 다투려면 무엇을 확인해야 하나요?","expected_terms":["행정처분","취소","위법"]}
+{"id":"admin_license_refusal","domain_code":"03_administrative_law","domain_name":"행정법","question":"인허가 거부처분을 다툴 때 고려해야 할 법적 쟁점은 무엇인가요?","expected_terms":["거부처분","인허가","재량"]}
+{"id":"criminal_fraud_elements","domain_code":"04_criminal_law","domain_name":"형사법","question":"사기죄가 성립하려면 어떤 구성요건이 필요한가요?","expected_terms":["사기","기망","재산"]}
+{"id":"criminal_self_defense","domain_code":"04_criminal_law","domain_name":"형사법","question":"정당방위가 인정되기 위해 어떤 요건을 검토해야 하나요?","expected_terms":["정당방위","방위","상당성"]}

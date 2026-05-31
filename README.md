@@ -261,7 +261,7 @@ cd backend
 
 ## RAG 검색 품질 평가
 
-답변 생성 전에 검색 품질만 먼저 확인하려면 `ai/rag/evaluation_questions.jsonl` 질문 세트를 사용합니다. 이 평가는 답변 LLM 호출 없이 질문 임베딩과 ChromaDB 검색만 실행합니다.
+답변 생성 전에 검색 품질만 먼저 확인하려면 `ai/rag/evaluation_questions.jsonl` 질문 세트를 사용합니다. 이 평가는 답변 LLM 호출 없이 질문 임베딩과 ChromaDB 검색만 실행합니다. 현재 질문 세트는 32개이며, 각 법 분야별 8개씩 구성되어 있습니다.
 
 ```powershell
 .\.venv\Scripts\python.exe ai\rag\evaluate_retrieval.py --collection-name legal_chunks_medium --top-k 5
@@ -276,6 +276,12 @@ cd backend
 결과는 `data/processed/retrieval_eval.medium.json`에 저장됩니다.
 
 현재 RAG 검색은 벡터 검색 결과에 질문 핵심 키워드가 포함된 chunk를 보강해서 합칩니다. 특정 법률 용어가 있는 질문에서 순수 벡터 검색이 다른 절차 쟁점으로 치우치는 문제를 줄이기 위한 기본 hybrid retrieval 방식입니다.
+
+현재 `legal_chunks_medium` 기준선:
+
+- 전체 32개 질문 중 2개는 중간 색인에 근거가 부족한 `coverage_gap`
+- 분야 필터 + 키워드 보강 기준 core 30개 질문의 분야 적중률: 100%
+- 분야 필터 + 키워드 보강 기준 core 30개 질문의 키워드 적중률: 100%
 
 ## 다음 작업
 

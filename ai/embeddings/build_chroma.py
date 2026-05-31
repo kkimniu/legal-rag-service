@@ -40,6 +40,29 @@ def batched(items: Iterable[dict[str, Any]], batch_size: int) -> Iterable[list[d
         yield batch
 
 
+def limited_chunks(
+    chunks: Iterable[dict[str, Any]],
+    max_chunks: int | None,
+    max_per_domain: int | None,
+    stats: dict[str, Any],
+) -> Iterable[dict[str, Any]]:
+    domain_counts: dict[str, int] = {}
+    yielded = 0
+
+    for chunk in chunks:
+        domain_code = str(chunk.get("domain_code") or "unknown")
+        if max_per_domain and domain_counts.get(domain_code, 0) >= max_per_domain:
+            stats["skipped_by_domain_limit"] = stats.get("skipped_by_domain_limit", 0) + 1
+            continue
+
+        yield chunk
+        yielded += 1
+        domain_counts[domain_code] = domain_counts.get(domain_code, 0) + 1
+
+        if max_chunks and yielded >= max_chunks:
+            break
+
+
 def metadata_value(value: Any) -> METADATA_VALUE:
     if value is None:
         return ""
@@ -94,25 +117,24 @@ def build_chroma(
     embedding_model_name: str,
     batch_size: int,
     max_chunks: int | None,
+    max_per_domain: int | None,
     reset_collection: bool,
     dry_run: bool,
 ) -> dict[str, Any]:
     if not input_path.exists():
         raise FileNotFoundError(f"Chunk JSONL does not exist: {input_path}")
 
-    chunks = read_jsonl(input_path)
-    if max_chunks:
-        chunks = islice(chunks, max_chunks)
-
     stats = {
         "chunks_seen": 0,
         "chunks_valid": 0,
         "batches": 0,
+        "domains": {},
         "collection_name": collection_name,
         "embedding_model": embedding_model_name,
         "persist_dir": str(persist_dir),
         "dry_run": dry_run,
     }
+    chunks = limited_chunks(read_jsonl(input_path), max_chunks, max_per_domain, stats)
 
     client = None
     collection = None
@@ -137,6 +159,8 @@ def build_chroma(
         for chunk in batch:
             stats["chunks_seen"] += 1
             chunk_id, text, metadata = validate_chunk(chunk)
+            domain_code = str(chunk.get("domain_code") or "unknown")
+            stats["domains"][domain_code] = stats["domains"].get(domain_code, 0) + 1
             ids.append(chunk_id)
             texts.append(text)
             metadatas.append(metadata)
@@ -167,6 +191,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embedding-model", default=os.getenv("OPENAI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL))
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--max-chunks", type=int, default=None)
+    parser.add_argument("--max-per-domain", type=int, default=None)
     parser.add_argument("--reset-collection", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -181,6 +206,7 @@ def main() -> None:
         embedding_model_name=args.embedding_model,
         batch_size=args.batch_size,
         max_chunks=args.max_chunks,
+        max_per_domain=args.max_per_domain,
         reset_collection=args.reset_collection,
         dry_run=args.dry_run,
     )

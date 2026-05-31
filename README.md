@@ -14,7 +14,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
-| Sample index | `legal_chunks_sample` 컬렉션 샘플 색인 확인 |
+| Sample index | `legal_chunks_sample` 컬렉션 1,000개 균형 샘플 색인 확인 |
 | Database | PostgreSQL Docker Compose 구성 추가 |
 
 ## 기술 스택
@@ -109,7 +109,7 @@ chunk 샘플 생성:
 샘플 ChromaDB 색인:
 
 ```powershell
-.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.sample.jsonl --collection-name legal_chunks_sample --reset-collection --max-chunks 100
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.sample.jsonl --collection-name legal_chunks_sample --reset-collection --max-per-domain 250
 ```
 
 ## Docker Compose 실행

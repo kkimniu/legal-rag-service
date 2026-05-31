@@ -10,6 +10,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | --- | --- |
 | Branch | `develop` |
 | Backend | FastAPI 기본 구조, health API, RAG ask API |
+| Auth | 회원가입, 로그인, JWT 발급, 현재 사용자 조회 API |
 | Frontend | 질문 입력, 생성 답변, 검색 근거 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
@@ -153,6 +154,40 @@ cd backend
 ..\.venv\Scripts\python.exe -m alembic revision --autogenerate -m "마이그레이션 설명"
 ```
 
+## Auth API
+
+회원가입과 로그인 API는 PostgreSQL에 `users` 테이블이 있어야 동작합니다. 먼저 Alembic 마이그레이션을 적용합니다.
+
+회원가입:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/v1/auth/register `
+  -ContentType "application/json" `
+  -Body '{"email":"user@example.com","password":"password123"}'
+```
+
+로그인:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/v1/auth/login `
+  -ContentType "application/x-www-form-urlencoded" `
+  -Body "username=user@example.com&password=password123"
+```
+
+현재 사용자 조회:
+
+```powershell
+$token = "<access_token>"
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:8000/api/v1/auth/me `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
 ## 동작 확인
 
 Backend health:
@@ -176,7 +211,7 @@ Invoke-RestMethod `
 
 1. Docker Compose 실행 검증
 2. 로컬 PostgreSQL에 Alembic 마이그레이션 적용
-3. 사용자 회원가입/로그인 JWT API 구현
+3. 실제 PostgreSQL에서 회원가입/로그인 API 검증
 4. 샘플 색인 규모 확대
 5. 전체 데이터 변환 및 전체 ChromaDB 색인
 6. RAG 답변 품질 평가용 테스트셋 작성

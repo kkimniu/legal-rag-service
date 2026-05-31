@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Any
 
 import chromadb
@@ -94,12 +95,50 @@ class RagService:
             query_kwargs["where"] = {"domain_code": domain_code}
 
         result = collection.query(**query_kwargs)
+        sources = self._sources_from_result(result)
 
+        keyword_sources = self._retrieve_keyword_sources(
+            collection=collection,
+            question=question,
+            query_embedding=query_embedding,
+            domain_code=domain_code,
+        )
+        if keyword_sources:
+            sources = self._merge_sources(keyword_sources, sources)
+
+        return sources[: self.top_k]
+
+    def _retrieve_keyword_sources(
+        self,
+        collection: Any,
+        question: str,
+        query_embedding: list[float],
+        domain_code: str | None,
+    ) -> list[RagSource]:
+        sources: list[RagSource] = []
+        for keyword in self._extract_keywords(question):
+            query_kwargs: dict[str, Any] = {
+                "query_embeddings": [query_embedding],
+                "n_results": self.top_k,
+                "where_document": {"$contains": keyword},
+                "include": ["documents", "metadatas", "distances"],
+            }
+            if domain_code:
+                query_kwargs["where"] = {"domain_code": domain_code}
+
+            try:
+                result = collection.query(**query_kwargs)
+            except Exception:
+                continue
+
+            sources.extend(self._sources_from_result(result))
+        return sources
+
+    def _sources_from_result(self, result: dict[str, Any]) -> list[RagSource]:
         documents = result.get("documents", [[]])[0]
         metadatas = result.get("metadatas", [[]])[0]
         distances = result.get("distances", [[]])[0]
         ids = result.get("ids", [[]])[0]
-
         sources = []
         for chunk_id, text, metadata, distance in zip(ids, documents, metadatas, distances, strict=False):
             safe_metadata = self._safe_metadata(metadata)
@@ -115,6 +154,50 @@ class RagService:
                 )
             )
         return sources
+
+    def _merge_sources(self, *source_groups: list[RagSource]) -> list[RagSource]:
+        merged: list[RagSource] = []
+        seen_ids: set[str] = set()
+        for sources in source_groups:
+            for source in sources:
+                if source.id in seen_ids:
+                    continue
+                merged.append(source)
+                seen_ids.add(source.id)
+        return merged
+
+    def _extract_keywords(self, question: str) -> list[str]:
+        stopwords = {
+            "어떤",
+            "무엇",
+            "무엇인가요",
+            "하나요",
+            "필요한가요",
+            "확인해야",
+            "하려면",
+            "판단할",
+            "때",
+        }
+        particles = ("으로", "에서", "에게", "에는", "이라면", "라면", "인가요", "하나요", "가", "이", "을", "를", "은", "는", "의", "에", "도")
+        keywords: list[str] = []
+
+        for token in re.findall(r"[0-9A-Za-z가-힣]+", question):
+            normalized = token
+            for particle in particles:
+                if len(normalized) > len(particle) + 1 and normalized.endswith(particle):
+                    normalized = normalized[: -len(particle)]
+                    break
+
+            candidates = [normalized]
+            if normalized.endswith("죄") and len(normalized) > 2:
+                candidates.append(normalized[:-1])
+
+            for candidate in candidates:
+                if len(candidate) < 2 or candidate in stopwords or candidate in keywords:
+                    continue
+                keywords.append(candidate)
+
+        return keywords[:3]
 
     def _generate_answer(self, question: str, sources: list[RagSource]) -> str:
         model = ChatOpenAI(

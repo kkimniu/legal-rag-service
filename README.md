@@ -275,6 +275,8 @@ cd backend
 
 결과는 `data/processed/retrieval_eval.medium.json`에 저장됩니다.
 
+현재 RAG 검색은 벡터 검색 결과에 질문 핵심 키워드가 포함된 chunk를 보강해서 합칩니다. 특정 법률 용어가 있는 질문에서 순수 벡터 검색이 다른 절차 쟁점으로 치우치는 문제를 줄이기 위한 기본 hybrid retrieval 방식입니다.
+
 ## 다음 작업
 
 1. 검색 품질 확인 결과를 바탕으로 chunk 크기와 top-k 조정

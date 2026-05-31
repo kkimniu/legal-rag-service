@@ -137,6 +137,22 @@ docker compose down
 docker compose down -v
 ```
 
+## Database Migration
+
+Alembic은 `backend/alembic` 아래에 구성되어 있습니다. 로컬 PostgreSQL이 실행 중이고 `.env`의 `DATABASE_URL`이 맞으면 아래 명령으로 마이그레이션을 적용합니다.
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+새 마이그레이션 생성:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m alembic revision --autogenerate -m "마이그레이션 설명"
+```
+
 ## 동작 확인
 
 Backend health:
@@ -159,7 +175,7 @@ Invoke-RestMethod `
 ## 다음 작업
 
 1. Docker Compose 실행 검증
-2. Alembic 초기화 및 첫 마이그레이션 작성
+2. 로컬 PostgreSQL에 Alembic 마이그레이션 적용
 3. 사용자 회원가입/로그인 JWT API 구현
 4. 샘플 색인 규모 확대
 5. 전체 데이터 변환 및 전체 ChromaDB 색인

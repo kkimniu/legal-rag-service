@@ -299,6 +299,21 @@ cd backend
 - 분야 필터 + 키워드 보강 기준 32개 질문의 분야 적중률: 100%
 - 분야 필터 + 키워드 보강 기준 32개 질문의 키워드 적중률: 100%
 
+답변 품질 평가:
+
+```powershell
+.\.venv\Scripts\python.exe ai\rag\evaluate_answers.py --use-domain-filter --per-domain-limit 1 --output data\processed\answer_eval.medium.json
+```
+
+답변 평가는 실제 답변 생성 API를 호출하므로 OpenAI 사용량이 발생합니다.
+
+현재 답변 품질 기준선:
+
+- 분야별 1개씩 총 4개 질문 평가
+- basic quality pass rate: 100%
+- 점검 항목: 답변 길이, 근거 수, 면책 문구, 근거 언급, 기대 키워드 포함 여부
+- 프롬프트는 근거에 없는 법률요건이나 일반론을 추측하지 않도록 제한
+
 ## 다음 작업
 
 1. 검색 품질 확인 결과를 바탕으로 chunk 크기와 top-k 조정

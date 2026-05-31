@@ -209,6 +209,13 @@ Invoke-RestMethod `
   -Body '{"question":"자동차 수리업자가 차량 수리에 실패했을 때 손해배상 책임을 면제받기 위해 증명해야 할 조건은 무엇인가요?"}'
 ```
 
+Backend tests:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m pytest
+```
+
 ## 다음 작업
 
 1. Docker Compose 실행 검증
@@ -217,4 +224,4 @@ Invoke-RestMethod `
 4. 샘플 색인 규모 확대
 5. 전체 데이터 변환 및 전체 ChromaDB 색인
 6. RAG 답변 품질 평가용 테스트셋 작성
-7. 백엔드/프론트 테스트 코드 추가
+7. 프론트 테스트 코드 추가

@@ -35,6 +35,7 @@ data/raw/                 AI Hub 원본 데이터, Git 제외
 data/processed/           전처리 산출물, Git 제외
 data/chunks/              검색용 chunk 산출물, Git 제외
 docs/                     데이터 출처와 처리 문서
+scripts/                  로컬 스모크 테스트와 운영 보조 스크립트
 chroma_db/                ChromaDB 로컬 저장소, Git 제외
 ```
 
@@ -252,6 +253,20 @@ Invoke-RestMethod `
 
 ## 동작 확인
 
+전체 실행 상태를 빠르게 확인:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_test.py
+```
+
+RAG 질문, 이력 저장, 이력 삭제까지 확인:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_test.py --with-rag
+```
+
+`--with-rag`는 실제 답변 생성과 임베딩 조회를 실행하므로 OpenAI 사용량이 발생합니다.
+
 Backend health:
 
 ```powershell
@@ -275,6 +290,18 @@ Backend tests:
 cd backend
 ..\.venv\Scripts\python.exe -m pytest
 ```
+
+## 브라우저 수동 테스트
+
+1. Docker 실행: `docker compose up --build -d`
+2. 마이그레이션 적용: `docker compose exec backend python -m alembic upgrade head`
+3. 브라우저 접속: `http://localhost:5173`
+4. 회원가입 또는 로그인
+5. 법 분야를 선택하고 질문 입력
+6. 답변, 검색 근거, RAG 연결 상태 확인
+7. 최근 질문 이력에서 방금 질문을 다시 열기
+8. 이력 삭제 버튼으로 항목 삭제
+9. API 문서 확인: `http://localhost:8000/docs`
 
 ## RAG 검색 품질 평가
 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getStoredToken } from './auth';
 
 export type RagSource = {
   id: string;
@@ -29,8 +30,11 @@ export async function askLegalQuestion(question: string): Promise<RagAnswer> {
     };
   }
 
+  const token = getStoredToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
   try {
-    const response = await api.post<RagAnswer>('/rag/ask', { question });
+    const response = await api.post<RagAnswer>('/rag/ask', { question }, { headers });
     return response.data;
   } catch {
     return {

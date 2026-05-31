@@ -190,6 +190,18 @@ Invoke-RestMethod `
 
 프론트엔드에도 로그인/회원가입 패널이 있습니다. PostgreSQL과 Alembic 마이그레이션이 준비되지 않은 상태에서는 인증 요청이 실패 안내를 표시합니다.
 
+로그인 상태에서 RAG 질문을 보내면 질문, 답변, 검색 근거가 `rag_queries` 테이블에 저장됩니다.
+
+최근 질문 이력 조회:
+
+```powershell
+$token = "<access_token>"
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:8000/api/v1/rag/history `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
 ## 동작 확인
 
 Backend health:

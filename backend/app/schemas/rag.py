@@ -26,3 +26,13 @@ class RagAskResponse(BaseModel):
     answer: str
     sources: list[RagSource] = []
     is_ready: bool = False
+
+
+class RagQueryRead(BaseModel):
+    """Stored RAG query history item."""
+
+    id: int
+    question: str
+    answer: str
+    sources: list[dict]
+    created_at: str

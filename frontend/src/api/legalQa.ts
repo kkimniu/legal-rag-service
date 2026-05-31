@@ -17,6 +17,14 @@ export type RagAnswer = {
   is_ready: boolean;
 };
 
+export type RagHistoryItem = {
+  id: number;
+  question: string;
+  answer: string;
+  sources: RagSource[];
+  created_at: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -49,5 +57,21 @@ export async function askLegalQuestion(question: string, domainCode?: string): P
       sources: [],
       is_ready: false,
     };
+  }
+}
+
+export async function fetchRagHistory(): Promise<RagHistoryItem[]> {
+  const token = getStoredToken();
+  if (!token) {
+    return [];
+  }
+
+  try {
+    const response = await api.get<RagHistoryItem[]>('/rag/history', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  } catch {
+    return [];
   }
 }

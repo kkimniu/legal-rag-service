@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
-import { askLegalQuestion, type RagAnswer } from './api/legalQa';
+import { askLegalQuestion, fetchRagHistory, type RagAnswer, type RagHistoryItem } from './api/legalQa';
 
 const initialResult: RagAnswer = {
   answer: '질문을 입력하면 검색된 법률 근거와 생성 답변이 여기에 표시됩니다.',
@@ -26,12 +26,14 @@ export function App() {
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('PostgreSQL과 마이그레이션 적용 후 로그인할 수 있습니다.');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [history, setHistory] = useState<RagHistoryItem[]>([]);
 
   useEffect(() => {
-    fetchCurrentUser().then((user) => {
+    fetchCurrentUser().then(async (user) => {
       if (user) {
         setCurrentUser(user);
         setAuthMessage('저장된 토큰으로 로그인 상태를 복원했습니다.');
+        setHistory(await fetchRagHistory());
       }
     });
   }, []);
@@ -40,6 +42,9 @@ export function App() {
     event.preventDefault();
     setIsLoading(true);
     setResult(await askLegalQuestion(question, domainCode));
+    if (currentUser) {
+      setHistory(await fetchRagHistory());
+    }
     setIsLoading(false);
   }
 
@@ -49,13 +54,24 @@ export function App() {
     setAuthMessage(authResult.message);
     if (authResult.user) {
       setCurrentUser(authResult.user);
+      setHistory(await fetchRagHistory());
     }
   }
 
   function handleLogout() {
     clearStoredToken();
     setCurrentUser(null);
+    setHistory([]);
     setAuthMessage('로그아웃되었습니다.');
+  }
+
+  function handleHistorySelect(item: RagHistoryItem) {
+    setQuestion(item.question);
+    setResult({
+      answer: item.answer,
+      sources: item.sources,
+      is_ready: true,
+    });
   }
 
   return (
@@ -146,6 +162,31 @@ export function App() {
                 </article>
               ))}
             </div>
+          </section>
+        )}
+
+        {currentUser && (
+          <section className="history-section">
+            <div className="section-heading">
+              <h2>최근 질문 이력</h2>
+              <button type="button" className="secondary-button" onClick={async () => setHistory(await fetchRagHistory())}>
+                새로고침
+              </button>
+            </div>
+            {history.length > 0 ? (
+              <div className="history-list">
+                {history.map((item) => (
+                  <article className="history-item" key={item.id}>
+                    <button type="button" onClick={() => handleHistorySelect(item)}>
+                      <span>{item.question}</span>
+                      <time>{new Date(item.created_at).toLocaleString('ko-KR')}</time>
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">로그인 상태에서 질문하면 이력이 저장됩니다.</p>
+            )}
           </section>
         )}
       </section>

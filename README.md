@@ -11,7 +11,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | Branch | `develop` |
 | Backend | FastAPI 기본 구조, health API, RAG ask API |
 | Auth | 회원가입, 로그인, JWT 발급, 현재 사용자 조회 API |
-| Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI |
+| Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI, 최근 질문 이력 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
 | Sample index | `legal_chunks_sample` 1,000개, `legal_chunks_medium` 4,000개 균형 샘플 색인 확인 |
@@ -238,6 +238,7 @@ Invoke-RestMethod `
 프론트엔드에도 로그인/회원가입 패널이 있습니다. PostgreSQL과 Alembic 마이그레이션이 준비되지 않은 상태에서는 인증 요청이 실패 안내를 표시합니다.
 
 로그인 상태에서 RAG 질문을 보내면 질문, 답변, 검색 근거가 `rag_queries` 테이블에 저장됩니다.
+프론트엔드에서는 로그인한 사용자의 최근 질문 이력을 조회하고, 이력 항목을 눌러 저장된 답변과 근거를 다시 열 수 있습니다.
 
 최근 질문 이력 조회:
 

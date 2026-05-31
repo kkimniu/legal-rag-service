@@ -14,20 +14,28 @@ body {
 }
 
 button,
+input,
 textarea {
   font: inherit;
 }
 
 .app-shell {
   min-height: 100vh;
-  padding: 40px 20px;
+  padding: 32px 20px;
 }
 
 .qa-panel {
-  width: min(880px, 100%);
+  width: min(1080px, 100%);
   margin: 0 auto;
   display: grid;
   gap: 24px;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
 }
 
 .eyebrow {
@@ -56,7 +64,8 @@ h1 {
 }
 
 .question-form,
-.answer-box {
+.answer-box,
+.auth-panel {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   background: #ffffff;
@@ -81,6 +90,13 @@ textarea {
   line-height: 1.5;
 }
 
+input {
+  width: 100%;
+  border: 1px solid #c9d2df;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
 button {
   justify-self: start;
   border: 0;
@@ -98,6 +114,62 @@ button:hover {
 button:disabled {
   cursor: progress;
   opacity: 0.7;
+}
+
+.secondary-button {
+  background: #eef2f6;
+  color: #172033;
+}
+
+.secondary-button:hover {
+  background: #d8dee8;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-tabs button {
+  justify-self: stretch;
+  background: #eef2f6;
+  color: #364456;
+}
+
+.auth-tabs button.active-tab {
+  background: #1f4f46;
+  color: #ffffff;
+}
+
+.auth-message {
+  margin-bottom: 0;
+  color: #536174;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.user-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
 }
 
 .answer-heading {
@@ -183,4 +255,10 @@ button:disabled {
   line-height: 1.6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 5;
+}
+
+@media (max-width: 860px) {
+  .app-header {
+    grid-template-columns: 1fr;
+  }
 }

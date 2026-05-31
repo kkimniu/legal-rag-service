@@ -11,7 +11,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | Branch | `develop` |
 | Backend | FastAPI 기본 구조, health API, RAG ask API |
 | Auth | 회원가입, 로그인, JWT 발급, 현재 사용자 조회 API |
-| Frontend | 질문 입력, 생성 답변, 검색 근거 UI |
+| Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
 | Sample index | `legal_chunks_sample` 컬렉션 샘플 색인 확인 |
@@ -187,6 +187,8 @@ Invoke-RestMethod `
   -Uri http://localhost:8000/api/v1/auth/me `
   -Headers @{ Authorization = "Bearer $token" }
 ```
+
+프론트엔드에도 로그인/회원가입 패널이 있습니다. PostgreSQL과 Alembic 마이그레이션이 준비되지 않은 상태에서는 인증 요청이 실패 안내를 표시합니다.
 
 ## 동작 확인
 

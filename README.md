@@ -147,6 +147,12 @@ cd backend
 200 {'status': 'ok'}
 ```
 
+RAG 검색과 생성 답변은 `.env`에 `OPENAI_API_KEY`가 있고 `CHROMA_COLLECTION_NAME`에 해당하는 ChromaDB 컬렉션이 생성되어 있을 때 동작합니다. 샘플 색인을 사용할 경우 아래 값을 설정합니다.
+
+```env
+CHROMA_COLLECTION_NAME=legal_chunks_sample
+```
+
 ## 환경 변수
 
 루트의 `.env.example`을 복사해서 `.env`로 사용합니다.

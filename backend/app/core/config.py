@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "legal_chunks"
     rag_top_k: int = 5
+    rag_context_max_chars: int = 6000
+    openai_temperature: float = 0.2
 
     @property
     def cors_origins(self) -> list[str]:

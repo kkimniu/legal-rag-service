@@ -149,7 +149,7 @@ def evaluate_question(
                 keyword_sources.extend(build_sources(collection.query(**keyword_query_kwargs), expected_terms))
             except Exception:
                 continue
-        sources = merge_sources(keyword_sources, sources)[:top_k]
+        sources = merge_sources(sources[:2], keyword_sources, sources[2:])[:top_k]
 
     domain_hit = any(source["domain_code"] == expected_domain for source in sources)
     term_hit = any(source["term_hits"] for source in sources)

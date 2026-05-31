@@ -16,11 +16,11 @@
 {"id":"ip_scope_confirmation","domain_code":"02_intellectual_property_law","domain_name":"지식재산권법","question":"권리범위확인심판에서는 확인대상발명이 특허권 범위에 속하는지 어떻게 봐야 하나요?","expected_terms":["권리범위","확인","특허"]}
 {"id":"admin_disposition_cancel","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정처분 취소소송에서 처분의 위법성을 다투려면 무엇을 확인해야 하나요?","expected_terms":["행정처분","취소","위법"]}
 {"id":"admin_license_refusal","domain_code":"03_administrative_law","domain_name":"행정법","question":"인허가 거부처분을 다툴 때 고려해야 할 법적 쟁점은 무엇인가요?","expected_terms":["거부처분","인허가","재량"]}
-{"id":"admin_discretion_abuse","domain_code":"03_administrative_law","domain_name":"행정법","question":"재량행위가 위법하다고 보려면 재량권 일탈이나 남용을 어떻게 판단하나요?","expected_terms":["재량","일탈","남용"],"coverage_gap":true}
+{"id":"admin_discretion_abuse","domain_code":"03_administrative_law","domain_name":"행정법","question":"재량행위가 위법하다고 보려면 재량권 일탈이나 남용을 어떻게 판단하나요?","expected_terms":["재량","일탈","남용"]}
 {"id":"admin_procedure_notice","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정청이 처분 전에 사전통지나 의견제출 기회를 주지 않은 경우 어떤 문제가 있나요?","expected_terms":["사전통지","의견제출","절차"]}
 {"id":"admin_tax_disposition","domain_code":"03_administrative_law","domain_name":"행정법","question":"과세처분을 취소해 달라고 다툴 때 납세자는 어떤 위법 사유를 주장할 수 있나요?","expected_terms":["과세처분","취소","납세"]}
 {"id":"admin_information_disclosure","domain_code":"03_administrative_law","domain_name":"행정법","question":"정보공개 거부처분이 적법한지 판단할 때 어떤 기준을 보나요?","expected_terms":["정보공개","거부","공개"]}
-{"id":"admin_sanction","domain_code":"03_administrative_law","domain_name":"행정법","question":"영업정지나 과징금 같은 제재처분이 과도하다고 다투려면 무엇을 봐야 하나요?","expected_terms":["제재처분","영업정지","과징금"],"coverage_gap":true}
+{"id":"admin_sanction","domain_code":"03_administrative_law","domain_name":"행정법","question":"영업정지나 과징금 같은 제재처분이 과도하다고 다투려면 무엇을 봐야 하나요?","expected_terms":["제재처분","영업정지","과징금"]}
 {"id":"admin_appeal_period","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정소송이나 심판을 제기할 때 제소기간을 놓치면 어떤 문제가 생기나요?","expected_terms":["제소기간","심판","소송"]}
 {"id":"criminal_fraud_elements","domain_code":"04_criminal_law","domain_name":"형사법","question":"사기죄가 성립하려면 어떤 구성요건이 필요한가요?","expected_terms":["사기","기망","재산"]}
 {"id":"criminal_self_defense","domain_code":"04_criminal_law","domain_name":"형사법","question":"정당방위가 인정되기 위해 어떤 요건을 검토해야 하나요?","expected_terms":["정당방위","방위","상당성"]}

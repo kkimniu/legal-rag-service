@@ -131,6 +131,22 @@ chunk 샘플 생성:
 .\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.medium.jsonl --collection-name legal_chunks_medium --max-per-domain 1000 --reset-collection
 ```
 
+행정법 키워드 보강 문서/chunk 생성:
+
+```powershell
+.\.venv\Scripts\python.exe ai\preprocessing\select_keyword_documents.py --output data\processed\legal_documents.admin_keywords_v2.jsonl --domain-code 03_administrative_law --keywords 재량 일탈 남용 영업정지 과징금 제재처분 --max-per-keyword 40
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.admin_keywords_v2.jsonl --output data\chunks\legal_chunks.admin_keywords_v2.jsonl
+.\.venv\Scripts\python.exe ai\preprocessing\select_keyword_documents.py --output data\processed\legal_documents.admin_procedure_keywords.jsonl --domain-code 03_administrative_law --keywords 사전통지 의견제출 절차 --max-per-keyword 40
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.admin_procedure_keywords.jsonl --output data\chunks\legal_chunks.admin_procedure_keywords.jsonl
+```
+
+보강 chunk를 기존 중간 색인에 추가:
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.admin_keywords_v2.jsonl --collection-name legal_chunks_medium --skip-existing --max-retries 8 --retry-base-seconds 3
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.admin_procedure_keywords.jsonl --collection-name legal_chunks_medium --skip-existing --max-retries 8 --retry-base-seconds 3
+```
+
 색인 중 OpenAI rate limit이 발생했거나 중간에 끊겼다면 이어서 실행합니다.
 
 ```powershell
@@ -279,9 +295,9 @@ cd backend
 
 현재 `legal_chunks_medium` 기준선:
 
-- 전체 32개 질문 중 2개는 중간 색인에 근거가 부족한 `coverage_gap`
-- 분야 필터 + 키워드 보강 기준 core 30개 질문의 분야 적중률: 100%
-- 분야 필터 + 키워드 보강 기준 core 30개 질문의 키워드 적중률: 100%
+- 행정법 보강 chunk 추가 후 총 4,255개 chunk
+- 분야 필터 + 키워드 보강 기준 32개 질문의 분야 적중률: 100%
+- 분야 필터 + 키워드 보강 기준 32개 질문의 키워드 적중률: 100%
 
 ## 다음 작업
 

@@ -104,7 +104,7 @@ class RagService:
             domain_code=domain_code,
         )
         if keyword_sources:
-            sources = self._merge_sources(keyword_sources, sources)
+            sources = self._merge_sources(sources[:2], keyword_sources, sources[2:])
 
         return sources[: self.top_k]
 

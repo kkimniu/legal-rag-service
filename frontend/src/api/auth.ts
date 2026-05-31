@@ -42,7 +42,7 @@ export async function register(email: string, password: string): Promise<AuthRes
     return {
       user: null,
       token: null,
-      message: '회원가입에 실패했습니다. 이미 가입된 이메일이거나 DB가 준비되지 않았을 수 있습니다.',
+      message: '회원가입에 실패했습니다. 이미 가입된 이메일이거나 DB 상태를 확인해주세요.',
     };
   }
 }

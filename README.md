@@ -15,7 +15,7 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
 | Sample index | `legal_chunks_sample` 컬렉션 1,000개 균형 샘플 색인 확인 |
-| Database | PostgreSQL Docker Compose 구성 추가 |
+| Database | PostgreSQL Docker Compose 구성, Alembic 마이그레이션, 인증 API 검증 |
 
 ## 기술 스택
 
@@ -118,6 +118,12 @@ Docker Desktop 설치 후 `.env`를 준비하고 실행합니다. 현재 로컬 
 
 ```powershell
 docker compose up --build
+```
+
+마이그레이션 적용:
+
+```powershell
+docker compose exec backend python -m alembic upgrade head
 ```
 
 서비스:
@@ -230,10 +236,8 @@ cd backend
 
 ## 다음 작업
 
-1. Docker Compose 실행 검증
-2. 로컬 PostgreSQL에 Alembic 마이그레이션 적용
-3. 실제 PostgreSQL에서 회원가입/로그인 API 검증
-4. 샘플 색인 규모 확대
-5. 전체 데이터 변환 및 전체 ChromaDB 색인
-6. RAG 답변 품질 평가용 테스트셋 작성
-7. 프론트 테스트 코드 추가
+1. 샘플 색인 규모 확대
+2. 전체 데이터 변환 및 전체 ChromaDB 색인
+3. RAG 답변 품질 평가용 테스트셋 작성
+4. 프론트 테스트 코드 추가
+5. 배포 환경용 Docker 설정 분리

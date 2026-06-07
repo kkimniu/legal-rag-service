@@ -291,6 +291,13 @@ cd backend
 ..\.venv\Scripts\python.exe -m pytest
 ```
 
+Frontend tests:
+
+```powershell
+cd frontend
+npm.cmd run test
+```
+
 ## 브라우저 수동 테스트
 
 1. Docker 실행: `docker compose up --build -d`

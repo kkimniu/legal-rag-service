@@ -154,6 +154,27 @@ chunk 샘플 생성:
 .\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.medium.jsonl --collection-name legal_chunks_medium --max-per-domain 1000 --skip-existing --max-retries 8 --retry-base-seconds 3
 ```
 
+전체 색인 전 규모/비용 추정:
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
+```
+
+현재 중간 색인과 행정법 보강 chunk 기준 추정:
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.medium.jsonl data\chunks\legal_chunks.admin_keywords_v2.jsonl data\chunks\legal_chunks.admin_procedure_keywords.jsonl --output data\processed\index_estimate.medium_enriched.json
+```
+
+기본 비용 계산은 `text-embedding-3-small`의 1M tokens당 `$0.02`를 사용합니다. 실제 비용은 OpenAI 가격표와 계정 조건에 따라 달라질 수 있으므로 실행 전 확인합니다.
+
+현재 생성된 중간+보강 chunk 파일 전체 기준 예시:
+
+- 중복 제외 chunk 수: 18,250개
+- 예상 embedding tokens: 약 1,175만 tokens
+- 예상 embedding 비용: 약 $0.24
+- 1M TPM 기준 이론상 최소 시간: 약 11.8분
+
 ## Docker Compose 실행
 
 Docker Desktop 설치 후 `.env`를 준비하고 실행합니다. 현재 로컬 환경에 Docker CLI가 없다면 `docker compose` 명령은 실행되지 않습니다.

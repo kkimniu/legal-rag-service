@@ -30,6 +30,12 @@ API 호출 없이 chunk 입력과 metadata 변환만 검증합니다.
 
 전체 chunk 파일을 색인합니다. 비용과 시간이 발생하므로 샘플 품질을 먼저 확인한 뒤 실행합니다.
 
+색인 전에 token 수, 예상 비용, 최소 실행 시간을 추정합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
+```
+
 ```powershell
 .\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks --reset-collection
 ```

@@ -36,6 +36,12 @@ API 호출 없이 chunk 입력과 metadata 변환만 검증합니다.
 .\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
 ```
 
+중간 샘플 통계와 원본 파일 수를 기준으로 전체 색인 규모를 projection합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\project_full_index.py --output data\processed\index_projection.full.json
+```
+
 ```powershell
 .\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks --reset-collection
 ```

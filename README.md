@@ -160,6 +160,12 @@ chunk 샘플 생성:
 .\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
 ```
 
+전체 원본 파일 수와 중간 샘플 통계를 사용해 full index를 projection:
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\project_full_index.py --output data\processed\index_projection.full.json
+```
+
 현재 중간 색인과 행정법 보강 chunk 기준 추정:
 
 ```powershell
@@ -174,6 +180,15 @@ chunk 샘플 생성:
 - 예상 embedding tokens: 약 1,175만 tokens
 - 예상 embedding 비용: 약 $0.24
 - 1M TPM 기준 이론상 최소 시간: 약 11.8분
+
+중간 샘플 비율을 전체 원본에 투영한 full index 예상:
+
+- 원본 JSON 문서 수: 537,122개
+- 예상 chunk 수: 약 3,033,296개
+- 예상 embedding tokens: 약 19.5억 tokens
+- 예상 embedding 비용: 약 $39.07
+- 1M TPM 기준 이론상 최소 시간: 약 32.6시간
+- 실제 실행 시간은 네트워크, 재시도, Chroma upsert 속도 때문에 더 길어질 수 있습니다.
 
 ## Docker Compose 실행
 

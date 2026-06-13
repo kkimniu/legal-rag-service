@@ -43,6 +43,7 @@ def batched(items: Iterable[dict[str, Any]], batch_size: int) -> Iterable[list[d
 
 def limited_chunks(
     chunks: Iterable[dict[str, Any]],
+    start_offset: int,
     max_chunks: int | None,
     max_per_domain: int | None,
     stats: dict[str, Any],
@@ -50,7 +51,11 @@ def limited_chunks(
     domain_counts: dict[str, int] = {}
     yielded = 0
 
-    for chunk in chunks:
+    for row_index, chunk in enumerate(chunks):
+        if row_index < start_offset:
+            stats["skipped_by_offset"] = stats.get("skipped_by_offset", 0) + 1
+            continue
+
         domain_code = str(chunk.get("domain_code") or "unknown")
         if max_per_domain and domain_counts.get(domain_code, 0) >= max_per_domain:
             stats["skipped_by_domain_limit"] = stats.get("skipped_by_domain_limit", 0) + 1
@@ -166,6 +171,7 @@ def build_chroma(
     collection_name: str,
     embedding_model_name: str,
     batch_size: int,
+    start_offset: int,
     max_chunks: int | None,
     max_per_domain: int | None,
     reset_collection: bool,
@@ -176,6 +182,8 @@ def build_chroma(
 ) -> dict[str, Any]:
     if not input_path.exists():
         raise FileNotFoundError(f"Chunk JSONL does not exist: {input_path}")
+    if start_offset < 0:
+        raise ValueError("start_offset must be 0 or greater.")
 
     stats = {
         "chunks_seen": 0,
@@ -186,8 +194,10 @@ def build_chroma(
         "embedding_model": embedding_model_name,
         "persist_dir": str(persist_dir),
         "dry_run": dry_run,
+        "start_offset": start_offset,
+        "max_chunks": max_chunks,
     }
-    chunks = limited_chunks(read_jsonl(input_path), max_chunks, max_per_domain, stats)
+    chunks = limited_chunks(read_jsonl(input_path), start_offset, max_chunks, max_per_domain, stats)
 
     client = None
     collection = None
@@ -254,6 +264,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--collection-name", default=DEFAULT_COLLECTION_NAME)
     parser.add_argument("--embedding-model", default=os.getenv("OPENAI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL))
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--start-offset", type=int, default=0)
     parser.add_argument("--max-chunks", type=int, default=None)
     parser.add_argument("--max-per-domain", type=int, default=None)
     parser.add_argument("--reset-collection", action="store_true")
@@ -272,6 +283,7 @@ def main() -> None:
         collection_name=args.collection_name,
         embedding_model_name=args.embedding_model,
         batch_size=args.batch_size,
+        start_offset=args.start_offset,
         max_chunks=args.max_chunks,
         max_per_domain=args.max_per_domain,
         reset_collection=args.reset_collection,

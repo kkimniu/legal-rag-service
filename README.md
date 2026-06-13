@@ -156,6 +156,15 @@ chunk 샘플 생성:
 
 전체 색인 전 규모/비용 추정:
 
+먼저 전체 원본 데이터를 표준 문서와 chunk로 변환합니다. 이 단계는 OpenAI API를 호출하지 않지만, 데이터가 커서 시간이 걸리고 `data/processed/`, `data/chunks/` 아래에 큰 파일을 생성합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\preprocessing\normalize_documents.py
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py
+```
+
+전체 chunk 파일이 생성되면 규모와 비용을 추정합니다.
+
 ```powershell
 .\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
 ```
@@ -165,6 +174,27 @@ chunk 샘플 생성:
 ```powershell
 .\.venv\Scripts\python.exe ai\embeddings\project_full_index.py --output data\processed\index_projection.full.json
 ```
+
+전체 색인은 오래 걸리므로 작은 배치 단위로 나눠 실행합니다. 먼저 dry run으로 첫 배치 입력을 확인합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 0 --max-chunks 10000 --dry-run
+```
+
+첫 실제 배치만 컬렉션을 초기화합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 0 --max-chunks 10000 --reset-collection --skip-existing --max-retries 8 --retry-base-seconds 3
+```
+
+다음 배치부터는 `--reset-collection` 없이 offset만 증가시킵니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 10000 --max-chunks 10000 --skip-existing --max-retries 8 --retry-base-seconds 3
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 20000 --max-chunks 10000 --skip-existing --max-retries 8 --retry-base-seconds 3
+```
+
+중간에 끊긴 배치는 같은 명령을 다시 실행합니다. `--skip-existing`이 이미 저장된 chunk id를 건너뛰므로 같은 범위를 안전하게 재시도할 수 있습니다.
 
 현재 중간 색인과 행정법 보강 chunk 기준 추정:
 
@@ -391,6 +421,6 @@ npm.cmd run test
 
 1. 검색 품질 확인 결과를 바탕으로 chunk 크기와 top-k 조정
 2. 답변 품질 평가용 테스트셋 작성
-3. 전체 데이터 변환 및 전체 ChromaDB 색인
+3. 전체 데이터 변환 및 `legal_chunks_full` 배치 색인
 4. 프론트 테스트 코드 추가
 5. 배포 환경용 Docker 설정 분리

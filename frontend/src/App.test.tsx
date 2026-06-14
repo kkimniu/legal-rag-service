@@ -58,6 +58,7 @@ describe('App', () => {
     mockedLogin.mockResolvedValue({
       user: { id: 1, email: 'user@example.com', is_active: true },
       token: 'token',
+      refreshToken: 'refresh-token',
       message: '로그인되었습니다.',
     });
     mockedCreateChatSession.mockResolvedValue(session);
@@ -115,6 +116,7 @@ describe('App', () => {
     mockedRegister.mockResolvedValue({
       user: { id: 2, email: 'new@example.com', is_active: true },
       token: 'new-token',
+      refreshToken: 'new-refresh-token',
       message: '회원가입 후 로그인되었습니다.',
     });
 

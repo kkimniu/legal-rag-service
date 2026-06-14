@@ -55,6 +55,8 @@ Copy-Item .env.example .env
 - `CHROMA_PERSIST_DIRECTORY`: ChromaDB 저장 경로
 - `CHROMA_COLLECTION_NAME`: ChromaDB 컬렉션 이름
 - `DATABASE_URL`: PostgreSQL 연결 문자열
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: API access token 만료 시간
+- `REFRESH_TOKEN_EXPIRE_DAYS`: 로그인 유지용 refresh token 만료 기간
 - `VITE_API_BASE_URL`: 프론트엔드 API 주소
 
 샘플 색인을 사용할 때:
@@ -315,6 +317,7 @@ Invoke-RestMethod `
 ```
 
 프론트엔드에도 로그인/회원가입 패널이 있습니다. PostgreSQL과 Alembic 마이그레이션이 준비되지 않은 상태에서는 인증 요청이 실패 안내를 표시합니다.
+로그인 성공 시 access token과 refresh token을 함께 저장합니다. 페이지 재접속 또는 새로고침 시 access token이 만료되어 있으면 `/auth/refresh`로 새 access token을 받아 로그인 상태를 복원합니다.
 
 로그인 상태에서 RAG 질문을 보내면 질문, 답변, 검색 근거가 `rag_queries` 테이블에 저장됩니다.
 프론트엔드는 챗봇 UI를 기본 화면으로 사용하며, 로그인한 사용자의 대화방과 메시지를 `chat_sessions`, `chat_messages` 테이블에 저장합니다.

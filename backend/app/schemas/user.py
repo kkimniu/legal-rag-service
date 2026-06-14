@@ -22,4 +22,11 @@ class Token(BaseModel):
     """JWT bearer token response."""
 
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
+
+
+class RefreshTokenRequest(BaseModel):
+    """Payload for requesting a new access token."""
+
+    refresh_token: str

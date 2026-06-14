@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me", min_length=8)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    refresh_token_expire_days: int = 14
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"

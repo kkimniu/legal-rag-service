@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getStoredToken } from './auth';
+import { getAuthHeaders } from './auth';
 
 export type RagSource = {
   id: string;
@@ -38,9 +38,6 @@ export async function askLegalQuestion(question: string, domainCode?: string): P
     };
   }
 
-  const token = getStoredToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   try {
     const response = await api.post<RagAnswer>(
       '/rag/ask',
@@ -48,7 +45,7 @@ export async function askLegalQuestion(question: string, domainCode?: string): P
         question,
         domain_code: domainCode || null,
       },
-      { headers },
+      { headers: await getAuthHeaders() },
     );
     return response.data;
   } catch {
@@ -61,14 +58,14 @@ export async function askLegalQuestion(question: string, domainCode?: string): P
 }
 
 export async function fetchRagHistory(): Promise<RagHistoryItem[]> {
-  const token = getStoredToken();
-  if (!token) {
+  const headers = await getAuthHeaders();
+  if (!headers) {
     return [];
   }
 
   try {
     const response = await api.get<RagHistoryItem[]>('/rag/history', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     });
     return response.data;
   } catch {
@@ -77,14 +74,14 @@ export async function fetchRagHistory(): Promise<RagHistoryItem[]> {
 }
 
 export async function deleteRagHistoryItem(id: number): Promise<boolean> {
-  const token = getStoredToken();
-  if (!token) {
+  const headers = await getAuthHeaders();
+  if (!headers) {
     return false;
   }
 
   try {
     await api.delete(`/rag/history/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     });
     return true;
   } catch {

@@ -18,7 +18,9 @@ def test_register_login_and_read_current_user(client: TestClient) -> None:
 
     assert login_response.status_code == 200
     token = login_response.json()["access_token"]
+    refresh_token = login_response.json()["refresh_token"]
     assert login_response.json()["token_type"] == "bearer"
+    assert refresh_token
 
     me_response = client.get(
         "/api/v1/auth/me",
@@ -27,6 +29,20 @@ def test_register_login_and_read_current_user(client: TestClient) -> None:
 
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "user@example.com"
+
+    refresh_response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+
+    assert refresh_response.status_code == 200
+    assert refresh_response.json()["access_token"]
+    assert refresh_response.json()["refresh_token"]
+
+    refreshed_me_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {refresh_response.json()['access_token']}"},
+    )
+
+    assert refreshed_me_response.status_code == 200
+    assert refreshed_me_response.json()["email"] == "user@example.com"
 
 
 def test_register_duplicate_email_returns_conflict(client: TestClient) -> None:
@@ -55,5 +71,11 @@ def test_login_with_wrong_password_returns_unauthorized(client: TestClient) -> N
 
 def test_read_current_user_without_token_returns_unauthorized(client: TestClient) -> None:
     response = client.get("/api/v1/auth/me")
+
+    assert response.status_code == 401
+
+
+def test_refresh_with_invalid_token_returns_unauthorized(client: TestClient) -> None:
+    response = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid"})
 
     assert response.status_code == 401

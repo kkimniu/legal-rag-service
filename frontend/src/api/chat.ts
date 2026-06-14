@@ -1,0 +1,85 @@
+import axios from 'axios';
+import { getAuthHeaders } from './auth';
+import type { RagSource } from './legalQa';
+
+export type ChatSession = {
+  id: number;
+  title: string;
+  domain_code?: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  last_message_preview?: string | null;
+};
+
+export type ChatMessage = {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  sources: RagSource[];
+  created_at: string;
+};
+
+export type ChatTurn = {
+  session: ChatSession;
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+  is_ready: boolean;
+};
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
+});
+
+export async function createChatSession(title?: string, domainCode?: string): Promise<ChatSession | null> {
+  try {
+    const response = await api.post<ChatSession>(
+      '/chat/sessions',
+      { title: title || null, domain_code: domainCode || null },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchChatSessions(): Promise<ChatSession[]> {
+  try {
+    const response = await api.get<ChatSession[]>('/chat/sessions', { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchChatMessages(sessionId: number): Promise<ChatMessage[]> {
+  try {
+    const response = await api.get<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function sendChatMessage(sessionId: number, content: string): Promise<ChatTurn | null> {
+  try {
+    const response = await api.post<ChatTurn>(
+      `/chat/sessions/${sessionId}/messages`,
+      { content },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteChatSession(sessionId: number): Promise<boolean> {
+  try {
+    await api.delete(`/chat/sessions/${sessionId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}

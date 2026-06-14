@@ -19,12 +19,16 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me", min_length=8)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    refresh_token_expire_days: int = 14
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     chroma_persist_directory: str = "./chroma_db"
+    chroma_collection_name: str = "legal_chunks"
     rag_top_k: int = 5
+    rag_context_max_chars: int = 6000
+    openai_temperature: float = 0.2
 
     @property
     def cors_origins(self) -> list[str]:

@@ -36,6 +36,16 @@ export function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
+
+  function toggleSource(key: string) {
+    setExpandedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   useEffect(() => {
     fetchCurrentUser().then(async (user) => {
@@ -278,17 +288,33 @@ export function App() {
                     <details>
                       <summary>검색 근거 {item.sources.length}개</summary>
                       <div className="sources-list">
-                        {item.sources.map((source, index) => (
-                          <section className="source-item" key={`${item.id}-${source.id}`}>
-                            <div className="source-meta">
-                              <span>근거 {index + 1}</span>
-                              <span>{source.domain_name ?? '분야 미상'}</span>
-                              {source.score !== null && source.score !== undefined && <span>거리 {source.score.toFixed(3)}</span>}
-                            </div>
-                            <h3>{source.title ?? '제목 없음'}</h3>
-                            <p>{source.text}</p>
-                          </section>
-                        ))}
+                        {item.sources.map((source, index) => {
+                          const sourceKey = `${item.id}-${source.id}`;
+                          const isExpanded = expandedSources.has(sourceKey);
+                          const isLong = source.text.length > 200;
+                          return (
+                            <section className="source-item" key={sourceKey}>
+                              <div className="source-meta">
+                                <span>근거 {index + 1}</span>
+                                <span>{source.domain_name ?? '분야 미상'}</span>
+                                {source.score !== null && source.score !== undefined && (
+                                  <span>유사도 {(1 - source.score).toFixed(3)}</span>
+                                )}
+                              </div>
+                              <h3>{source.title ?? '제목 없음'}</h3>
+                              <p className={isExpanded ? 'expanded' : ''}>{source.text}</p>
+                              {isLong && (
+                                <button
+                                  type="button"
+                                  className="source-expand-btn"
+                                  onClick={() => toggleSource(sourceKey)}
+                                >
+                                  {isExpanded ? '접기' : '더보기'}
+                                </button>
+                              )}
+                            </section>
+                          );
+                        })}
                       </div>
                     </details>
                   )}

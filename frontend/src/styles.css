@@ -363,6 +363,29 @@ summary {
   -webkit-line-clamp: 5;
 }
 
+.source-item p.expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.source-expand-btn {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 10px;
+  border: 1px solid #c5cdd8;
+  border-radius: 999px;
+  background: transparent;
+  color: #1f4f46;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.source-expand-btn:hover {
+  background: #eef2f6;
+}
+
 .empty-chat {
   align-self: center;
   justify-self: center;

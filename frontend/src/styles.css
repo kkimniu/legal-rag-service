@@ -386,6 +386,23 @@ summary {
   background: #eef2f6;
 }
 
+.regenerate-btn {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid #c5cdd8;
+  border-radius: 999px;
+  background: transparent;
+  color: #4c5b6e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.regenerate-btn:hover {
+  background: #eef2f6;
+}
+
 .empty-chat {
   align-self: center;
   justify-self: center;

@@ -129,6 +129,26 @@ export function App() {
     setChatStatus('대화방을 삭제했습니다.');
   }
 
+  async function handleRegenerate() {
+    if (!activeSession || isLoading) return;
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUserMsg) return;
+
+    setIsLoading(true);
+    setChatStatus('답변을 재생성하는 중입니다.');
+    const turn = await sendChatMessage(activeSession.id, lastUserMsg.content);
+    if (!turn) {
+      setChatStatus('재생성에 실패했습니다. 백엔드 서버 상태를 확인해주세요.');
+      setIsLoading(false);
+      return;
+    }
+    setMessages((items) => [...items, turn.user_message, turn.assistant_message]);
+    setActiveSession(turn.session);
+    setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
+    setChatStatus('답변을 재생성했습니다.');
+    setIsLoading(false);
+  }
+
   async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!message.trim()) {
@@ -280,7 +300,11 @@ export function App() {
 
           <div className="message-list" aria-live="polite">
             {messages.length > 0 ? (
-              messages.map((item) => (
+              messages.map((item, index) => {
+                const isLastAssistant =
+                  item.role === 'assistant' &&
+                  index === messages.map((m, i) => (m.role === 'assistant' ? i : -1)).filter((i) => i >= 0).at(-1);
+                return (
                 <article className={`message-bubble ${item.role}`} key={item.id}>
                   <span>{item.role === 'user' ? '사용자' : 'AI'}</span>
                   <p>{item.content}</p>
@@ -318,8 +342,14 @@ export function App() {
                       </div>
                     </details>
                   )}
+                  {isLastAssistant && !isLoading && (
+                    <button type="button" className="regenerate-btn" onClick={handleRegenerate}>
+                      ↺ 재생성
+                    </button>
+                  )}
                 </article>
-              ))
+                );
+              })
             ) : (
               <div className="empty-chat">
                 <h2>{currentUser ? '새 질문으로 채팅을 시작하세요' : '로그인 후 채팅을 시작하세요'}</h2>

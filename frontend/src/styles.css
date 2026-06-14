@@ -109,6 +109,11 @@ textarea {
   line-height: 1.5;
 }
 
+select:disabled {
+  color: #536174;
+  background: #eef2f6;
+}
+
 button {
   justify-self: start;
   border: 0;
@@ -214,6 +219,14 @@ button:disabled {
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.session-open-button b {
+  border-radius: 999px;
+  background: #dff3e8;
+  color: #1f6b4d;
+  font-size: 12px;
+  padding: 3px 8px;
 }
 
 .session-open-button small,

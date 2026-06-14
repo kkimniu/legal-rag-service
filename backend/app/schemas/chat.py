@@ -7,13 +7,13 @@ class ChatSessionCreate(BaseModel):
     """Optional title payload for creating a chatbot session."""
 
     title: str | None = Field(default=None, max_length=255)
+    domain_code: str | None = Field(default=None, pattern=r"^0[1-4]_[a-z_]+$")
 
 
 class ChatMessageCreate(BaseModel):
     """User message sent to a chatbot session."""
 
     content: str = Field(..., min_length=1)
-    domain_code: str | None = Field(default=None, pattern=r"^0[1-4]_[a-z_]+$")
 
 
 class ChatMessageRead(BaseModel):
@@ -31,6 +31,7 @@ class ChatSessionRead(BaseModel):
 
     id: int
     title: str
+    domain_code: str | None = None
     created_at: str
     updated_at: str
     message_count: int = 0

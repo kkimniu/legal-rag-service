@@ -7,9 +7,18 @@ from app.models.chat import ChatMessage, ChatSession
 from app.schemas.rag import RagAskResponse, RagSource
 
 
-def create_chat_session(db: Session, user_id: int, title: str | None = None) -> ChatSession:
+def create_chat_session(
+    db: Session,
+    user_id: int,
+    title: str | None = None,
+    domain_code: str | None = None,
+) -> ChatSession:
     """Create a new chatbot conversation."""
-    session = ChatSession(user_id=user_id, title=(title or "새 대화").strip() or "새 대화")
+    session = ChatSession(
+        user_id=user_id,
+        title=(title or "새 대화").strip() or "새 대화",
+        domain_code=domain_code,
+    )
     db.add(session)
     db.commit()
     db.refresh(session)

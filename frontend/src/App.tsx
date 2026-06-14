@@ -18,6 +18,10 @@ const domainOptions = [
   { value: '04_criminal_law', label: '형사법' },
 ];
 
+function domainLabel(domainCode?: string | null) {
+  return domainOptions.find((option) => option.value === (domainCode ?? ''))?.label ?? '전체 분야';
+}
+
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
@@ -123,7 +127,7 @@ export function App() {
 
     let session = activeSession;
     if (!session) {
-      session = await createChatSession(message.trim().slice(0, 40));
+      session = await createChatSession(message.trim().slice(0, 40), domainCode);
       if (!session) {
         setChatStatus('대화방을 만들 수 없습니다. 로그인 또는 DB 상태를 확인해주세요.');
         return;
@@ -145,7 +149,7 @@ export function App() {
     setIsLoading(true);
     setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
 
-    const turn = await sendChatMessage(session.id, content, domainCode);
+    const turn = await sendChatMessage(session.id, content);
     if (!turn) {
       setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
       setMessages((items) => items.filter((item) => item.id !== optimisticUserMessage.id));
@@ -219,6 +223,7 @@ export function App() {
                         onClick={() => handleSelectSession(session)}
                       >
                         <span>{session.title}</span>
+                        <b>{domainLabel(session.domain_code)}</b>
                         <small>
                           메시지 {session.message_count}개
                           {session.last_message_preview ? ` · ${session.last_message_preview}` : ''}
@@ -242,11 +247,18 @@ export function App() {
           <header className="chat-header">
             <div>
               <h2>{activeSession?.title ?? '새 채팅'}</h2>
-              <p>{chatStatus}</p>
+              <p>
+                {activeSession ? `${domainLabel(activeSession.domain_code)} 대화 · ${chatStatus}` : chatStatus}
+              </p>
             </div>
             <div className="domain-control">
               <label htmlFor="domain">법 분야</label>
-              <select id="domain" value={domainCode} onChange={(event) => setDomainCode(event.target.value)}>
+              <select
+                id="domain"
+                value={activeSession?.domain_code ?? domainCode}
+                onChange={(event) => setDomainCode(event.target.value)}
+                disabled={Boolean(activeSession)}
+              >
                 {domainOptions.map((option) => (
                   <option key={option.value || 'all'} value={option.value}>
                     {option.label}

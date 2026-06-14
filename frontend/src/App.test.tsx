@@ -49,6 +49,7 @@ describe('App', () => {
     const session = {
       id: 1,
       title: '계약 불이행 책임',
+      domain_code: '01_civil_law',
       created_at: '2026-06-14T10:00:00',
       updated_at: '2026-06-14T10:00:00',
       message_count: 2,
@@ -103,8 +104,8 @@ describe('App', () => {
 
     expect(screen.getByText('계약 불이행 책임은 무엇인가요?')).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?');
-      expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?', '01_civil_law');
+      expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?', '01_civil_law');
+      expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?');
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
     expect(screen.getByText('검색 근거 1개')).toBeInTheDocument();

@@ -5,6 +5,7 @@ import type { RagSource } from './legalQa';
 export type ChatSession = {
   id: number;
   title: string;
+  domain_code?: string | null;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -35,9 +36,13 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
-export async function createChatSession(title?: string): Promise<ChatSession | null> {
+export async function createChatSession(title?: string, domainCode?: string): Promise<ChatSession | null> {
   try {
-    const response = await api.post<ChatSession>('/chat/sessions', { title: title || null }, { headers: authHeaders() });
+    const response = await api.post<ChatSession>(
+      '/chat/sessions',
+      { title: title || null, domain_code: domainCode || null },
+      { headers: authHeaders() },
+    );
     return response.data;
   } catch {
     return null;
@@ -62,11 +67,11 @@ export async function fetchChatMessages(sessionId: number): Promise<ChatMessage[
   }
 }
 
-export async function sendChatMessage(sessionId: number, content: string, domainCode?: string): Promise<ChatTurn | null> {
+export async function sendChatMessage(sessionId: number, content: string): Promise<ChatTurn | null> {
   try {
     const response = await api.post<ChatTurn>(
       `/chat/sessions/${sessionId}/messages`,
-      { content, domain_code: domainCode || null },
+      { content },
       { headers: authHeaders() },
     );
     return response.data;

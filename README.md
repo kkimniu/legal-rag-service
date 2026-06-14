@@ -331,7 +331,7 @@ Invoke-RestMethod `
 
 ## Chat API
 
-챗봇 기능은 로그인한 사용자만 사용할 수 있습니다. 먼저 Alembic 마이그레이션을 적용해 `chat_sessions`, `chat_messages` 테이블을 생성합니다.
+챗봇 기능은 로그인한 사용자만 사용할 수 있습니다. 먼저 Alembic 마이그레이션을 적용해 `chat_sessions`, `chat_messages` 테이블을 생성합니다. 대화방은 생성 시점의 `domain_code`로 법 분야가 고정되고, 이후 메시지는 해당 분야 필터로 검색합니다.
 
 ```powershell
 cd backend
@@ -347,7 +347,7 @@ $session = Invoke-RestMethod `
   -Uri http://localhost:8000/api/v1/chat/sessions `
   -ContentType "application/json" `
   -Headers @{ Authorization = "Bearer $token" } `
-  -Body '{"title":"민사법 상담"}'
+  -Body '{"title":"민사법 상담","domain_code":"01_civil_law"}'
 ```
 
 메시지 전송:
@@ -358,7 +358,7 @@ Invoke-RestMethod `
   -Uri "http://localhost:8000/api/v1/chat/sessions/$($session.id)/messages" `
   -ContentType "application/json" `
   -Headers @{ Authorization = "Bearer $token" } `
-  -Body '{"content":"계약 불이행으로 손해가 발생한 경우 책임은 어떻게 판단되나요?","domain_code":"01_civil_law"}'
+  -Body '{"content":"계약 불이행으로 손해가 발생한 경우 책임은 어떻게 판단되나요?"}'
 ```
 
 대화방 목록 조회:
@@ -472,7 +472,7 @@ npm.cmd run test
 
 ## 다음 작업
 
-1. 챗봇 화면에서 민사법 probe 답변 품질 수동 확인
+1. 챗봇 화면에서 4개 법 분야 probe 답변 품질 수동 확인
 2. 답변 품질 평가용 테스트셋을 챗봇 API 기준으로 확장
 3. 전체 데이터 변환 및 `legal_chunks_full` 배치 색인
 4. 대화 제목 수정, 메시지 재생성 같은 챗봇 편의 기능 추가

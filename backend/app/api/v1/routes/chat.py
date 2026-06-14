@@ -36,6 +36,7 @@ def session_read(session: ChatSession, db: Session | None = None) -> ChatSession
     return ChatSessionRead(
         id=session.id,
         title=session.title,
+        domain_code=session.domain_code,
         created_at=session.created_at.isoformat(),
         updated_at=session.updated_at.isoformat(),
         message_count=message_count,
@@ -60,7 +61,7 @@ def create_session(
     db: Session = Depends(get_db),
 ) -> ChatSessionRead:
     """Create a new chatbot conversation for the current user."""
-    return session_read(create_chat_session(db, current_user.id, payload.title), db)
+    return session_read(create_chat_session(db, current_user.id, payload.title, payload.domain_code), db)
 
 
 @router.get("/sessions", response_model=list[ChatSessionRead])
@@ -102,7 +103,7 @@ def send_message(
     user_message = add_user_message(db, session, payload.content)
     response = RagService().answer(
         payload.content,
-        domain_code=payload.domain_code,
+        domain_code=session.domain_code,
         chat_history=chat_history,
     )
     assistant_message = add_assistant_message(db, session, response)

@@ -40,7 +40,7 @@ class RagService:
 
         try:
             retrieval_question = self._build_retrieval_question(question, chat_history or [])
-            sources = self._retrieve_sources(retrieval_question, persist_directory, domain_code)
+            sources = self._retrieve_sources(retrieval_question, question, persist_directory, domain_code)
         except Exception as exc:
             return RagAskResponse(
                 answer=f"RAG 검색 중 오류가 발생했습니다: {exc}",
@@ -99,7 +99,8 @@ class RagService:
 
     def _retrieve_sources(
         self,
-        question: str,
+        retrieval_question: str,
+        original_question: str,
         persist_directory: Path,
         domain_code: str | None = None,
     ) -> list[RagSource]:
@@ -109,7 +110,7 @@ class RagService:
             model=settings.openai_embedding_model,
             api_key=settings.openai_api_key,
         )
-        query_embedding = embeddings.embed_query(question)
+        query_embedding = embeddings.embed_query(retrieval_question)
         query_kwargs: dict[str, Any] = {
             "query_embeddings": [query_embedding],
             "n_results": self.top_k,
@@ -123,7 +124,7 @@ class RagService:
 
         keyword_sources = self._retrieve_keyword_sources(
             collection=collection,
-            question=question,
+            question=original_question,
             query_embedding=query_embedding,
             domain_code=domain_code,
         )
@@ -143,7 +144,7 @@ class RagService:
         for keyword in self._extract_keywords(question):
             query_kwargs: dict[str, Any] = {
                 "query_embeddings": [query_embedding],
-                "n_results": self.top_k,
+                "n_results": min(2, self.top_k),
                 "where_document": {"$contains": keyword},
                 "include": ["documents", "metadatas", "distances"],
             }
@@ -201,6 +202,16 @@ class RagService:
             "하려면",
             "판단할",
             "때",
+            "대해",
+            "관해",
+            "위해",
+            "통해",
+            "위한",
+            "대한",
+            "관한",
+            "이미",
+            "있나요",
+            "있는",
         }
         particles = ("으로", "에서", "에게", "에는", "이라면", "라면", "인가요", "하나요", "가", "이", "을", "를", "은", "는", "의", "에", "도")
         keywords: list[str] = []

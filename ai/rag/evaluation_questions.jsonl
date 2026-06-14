@@ -30,3 +30,6 @@
 {"id":"criminal_retrial","domain_code":"04_criminal_law","domain_name":"형사법","question":"형사재판이 확정된 뒤 재심이나 헌법소원으로 다투려면 어떤 제한이 있나요?","expected_terms":["재심","헌법소원","재판"]}
 {"id":"criminal_prosecutor_discretion","domain_code":"04_criminal_law","domain_name":"형사법","question":"검사의 불기소처분이나 기소유예처분에서 자의적인 검찰권 행사가 문제되는 경우는 언제인가요?","expected_terms":["불기소","기소유예","검찰권"]}
 {"id":"criminal_evidence_rule","domain_code":"04_criminal_law","domain_name":"형사법","question":"형사절차에서 위법수집증거 배제나 증거능력이 문제될 때 어떤 원칙을 보나요?","expected_terms":["증거","위법수집","증거능력"]}
+{"id":"admin_appeal_deadline_passed","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정처분에 대한 제소기간이 지난 후에도 다툴 수 있는 구제 수단이 있나요?","expected_terms":["제소기간","구제","헌법소원"]}
+{"id":"admin_execution_stay","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정처분에 대한 집행정지 신청이 인용되려면 어떤 요건을 충족해야 하나요?","expected_terms":["집행정지","요건","처분"]}
+{"id":"admin_constitutional_complaint","domain_code":"03_administrative_law","domain_name":"행정법","question":"행정처분에 불복하여 헌법소원을 제기할 때 보충성 원칙이 문제되는 이유는 무엇인가요?","expected_terms":["헌법소원","보충성","행정처분"]}

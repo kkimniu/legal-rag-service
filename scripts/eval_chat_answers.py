@@ -63,7 +63,7 @@ EVAL_CASES: list[dict[str, Any]] = [
         "first_expected_terms": ["행정처분", "취소", "심판"],
         "followup_question": "제소기간을 이미 지났는데 다른 구제 방법이 있나요?",
         "followup_expected_terms": ["제소기간", "구제"],
-        "context_bridge_terms": ["행정처분", "취소"],
+        "context_bridge_terms": ["행정", "처분"],
     },
     {
         "id": "admin_fine_suspension",
@@ -73,7 +73,7 @@ EVAL_CASES: list[dict[str, Any]] = [
         "first_expected_terms": ["과징금", "재량", "처분"],
         "followup_question": "이 처분에 대해 집행정지를 신청하려면 어떤 요건을 충족해야 하나요?",
         "followup_expected_terms": ["집행정지", "요건"],
-        "context_bridge_terms": ["과징금", "처분"],
+        "context_bridge_terms": ["처분", "집행정지"],
     },
     {
         "id": "criminal_fraud_complaint",

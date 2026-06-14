@@ -1,6 +1,15 @@
 import axios from 'axios';
 import { getAuthHeaders } from './auth';
-import type { RagSource } from './legalQa';
+
+export type RagSource = {
+  id: string;
+  title?: string | null;
+  domain_name?: string | null;
+  source_type?: string | null;
+  text: string;
+  score?: number | null;
+  metadata: Record<string, string | number | boolean>;
+};
 
 export type ChatSession = {
   id: number;

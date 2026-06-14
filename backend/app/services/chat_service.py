@@ -1,4 +1,6 @@
-from sqlalchemy import desc, select
+from datetime import UTC, datetime
+
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.chat import ChatMessage, ChatSession
@@ -45,11 +47,29 @@ def list_chat_messages(db: Session, session_id: int, limit: int = 50) -> list[Ch
     return list(db.scalars(statement))
 
 
+def count_chat_messages(db: Session, session_id: int) -> int:
+    """Count messages stored in one conversation."""
+    statement = select(func.count(ChatMessage.id)).where(ChatMessage.session_id == session_id)
+    return int(db.scalar(statement) or 0)
+
+
+def get_last_chat_message(db: Session, session_id: int) -> ChatMessage | None:
+    """Return the newest message in one conversation."""
+    statement = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(desc(ChatMessage.created_at), desc(ChatMessage.id))
+        .limit(1)
+    )
+    return db.scalar(statement)
+
+
 def add_user_message(db: Session, session: ChatSession, content: str) -> ChatMessage:
     """Persist a user message and use it to name a new conversation."""
     message = ChatMessage(session_id=session.id, role="user", content=content.strip(), sources=[])
     if session.title == "새 대화":
         session.title = content.strip()[:40] or "새 대화"
+    session.updated_at = datetime.now(UTC)
     db.add(message)
     db.add(session)
     db.commit()
@@ -66,6 +86,7 @@ def add_assistant_message(db: Session, session: ChatSession, response: RagAskRes
         content=response.answer,
         sources=[source.model_dump() for source in response.sources],
     )
+    session.updated_at = datetime.now(UTC)
     db.add(message)
     db.add(session)
     db.commit()

@@ -7,8 +7,10 @@ from app.schemas.rag import RagAskResponse, RagSource
 from app.services.chat_service import (
     add_assistant_message,
     add_user_message,
+    count_chat_messages,
     create_chat_session,
     delete_chat_session,
+    get_last_chat_message,
     list_chat_messages,
     list_chat_sessions,
 )
@@ -53,6 +55,8 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
     assert sessions[0].title == "계약 불이행 책임은 무엇인가요?"
     assert [message.id for message in messages] == [user_message.id, assistant_message.id]
     assert messages[1].sources[0]["id"] == "chunk-1"
+    assert count_chat_messages(db_session, session.id) == 2
+    assert get_last_chat_message(db_session, session.id).id == assistant_message.id
 
 
 def test_delete_chat_session_only_deletes_owner_session(db_session: Session) -> None:
@@ -105,5 +109,7 @@ def test_chat_session_api_creates_and_reads_owned_session(client: TestClient) ->
     assert create_response.json()["title"] == "민사법 상담"
     assert sessions_response.status_code == 200
     assert sessions_response.json()[0]["title"] == "민사법 상담"
+    assert sessions_response.json()[0]["message_count"] == 0
+    assert sessions_response.json()[0]["last_message_preview"] is None
     assert messages_response.status_code == 200
     assert messages_response.json() == []

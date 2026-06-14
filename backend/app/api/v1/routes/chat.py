@@ -15,8 +15,10 @@ from app.schemas.chat import (
 from app.services.chat_service import (
     add_assistant_message,
     add_user_message,
+    count_chat_messages,
     create_chat_session,
     delete_chat_session,
+    get_last_chat_message,
     get_chat_session,
     list_chat_messages,
     list_chat_sessions,
@@ -27,12 +29,17 @@ from app.services.rag_service import RagService
 router = APIRouter()
 
 
-def session_read(session: ChatSession) -> ChatSessionRead:
+def session_read(session: ChatSession, db: Session | None = None) -> ChatSessionRead:
+    message_count = count_chat_messages(db, session.id) if db is not None else 0
+    last_message = get_last_chat_message(db, session.id) if db is not None else None
+    last_message_preview = last_message.content[:80] if last_message is not None else None
     return ChatSessionRead(
         id=session.id,
         title=session.title,
         created_at=session.created_at.isoformat(),
         updated_at=session.updated_at.isoformat(),
+        message_count=message_count,
+        last_message_preview=last_message_preview,
     )
 
 
@@ -53,7 +60,7 @@ def create_session(
     db: Session = Depends(get_db),
 ) -> ChatSessionRead:
     """Create a new chatbot conversation for the current user."""
-    return session_read(create_chat_session(db, current_user.id, payload.title))
+    return session_read(create_chat_session(db, current_user.id, payload.title), db)
 
 
 @router.get("/sessions", response_model=list[ChatSessionRead])
@@ -62,7 +69,7 @@ def read_sessions(
     db: Session = Depends(get_db),
 ) -> list[ChatSessionRead]:
     """Return recent chatbot conversations for the current user."""
-    return [session_read(session) for session in list_chat_sessions(db, current_user.id)]
+    return [session_read(session, db) for session in list_chat_sessions(db, current_user.id)]
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageRead])
@@ -101,7 +108,7 @@ def send_message(
     assistant_message = add_assistant_message(db, session, response)
 
     return ChatTurnResponse(
-        session=session_read(session),
+        session=session_read(session, db),
         user_message=message_read(user_message),
         assistant_message=message_read(assistant_message),
         is_ready=response.is_ready,

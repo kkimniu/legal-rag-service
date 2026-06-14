@@ -33,6 +33,8 @@ class ChatSessionRead(BaseModel):
     title: str
     created_at: str
     updated_at: str
+    message_count: int = 0
+    last_message_preview: str | None = None
 
 
 class ChatTurnResponse(BaseModel):

@@ -216,9 +216,18 @@ button:disabled {
   -webkit-line-clamp: 2;
 }
 
+.session-open-button small,
 .session-open-button time {
   color: #536174;
   font-size: 12px;
+}
+
+.session-open-button small {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .session-delete-button {

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
 import {
   createChatSession,
@@ -31,6 +31,7 @@ export function App() {
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetchCurrentUser().then(async (user) => {
@@ -41,6 +42,12 @@ export function App() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (typeof messageEndRef.current?.scrollIntoView === 'function') {
+      messageEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages.length, isLoading]);
 
   async function refreshSessions() {
     const nextSessions = await fetchChatSessions();
@@ -62,6 +69,9 @@ export function App() {
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
         setMessages(await fetchChatMessages(nextSessions[0].id));
+      } else {
+        setActiveSession(null);
+        setMessages([]);
       }
       setChatStatus('대화방을 선택하거나 새 대화를 시작하세요.');
     }
@@ -77,16 +87,11 @@ export function App() {
     setChatStatus('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   }
 
-  async function handleCreateSession() {
-    const session = await createChatSession();
-    if (!session) {
-      setChatStatus('대화방을 만들 수 없습니다. 로그인 또는 DB 상태를 확인해주세요.');
-      return;
-    }
-    setSessions([session, ...sessions]);
-    setActiveSession(session);
+  function handleCreateSession() {
+    setActiveSession(null);
     setMessages([]);
-    setChatStatus('새 대화를 시작했습니다.');
+    setMessage('');
+    setChatStatus('새 채팅입니다. 첫 메시지를 보내면 대화가 저장됩니다.');
   }
 
   async function handleSelectSession(session: ChatSession) {
@@ -214,6 +219,10 @@ export function App() {
                         onClick={() => handleSelectSession(session)}
                       >
                         <span>{session.title}</span>
+                        <small>
+                          메시지 {session.message_count}개
+                          {session.last_message_preview ? ` · ${session.last_message_preview}` : ''}
+                        </small>
                         <time>{new Date(session.updated_at).toLocaleString('ko-KR')}</time>
                       </button>
                       <button type="button" className="session-delete-button" onClick={() => handleDeleteSession(session)}>
@@ -232,7 +241,7 @@ export function App() {
         <section className="chat-panel" aria-label="챗봇">
           <header className="chat-header">
             <div>
-              <h2>{activeSession?.title ?? '새 법률 상담 대화'}</h2>
+              <h2>{activeSession?.title ?? '새 채팅'}</h2>
               <p>{chatStatus}</p>
             </div>
             <div className="domain-control">
@@ -275,10 +284,11 @@ export function App() {
               ))
             ) : (
               <div className="empty-chat">
-                <h2>질문을 입력해 대화를 시작하세요</h2>
-                <p>현재 선택한 컬렉션 기준으로 법률 근거를 검색하고 답변과 근거를 함께 저장합니다.</p>
+                <h2>{currentUser ? '새 질문으로 채팅을 시작하세요' : '로그인 후 채팅을 시작하세요'}</h2>
+                <p>한 채팅 안에서는 이전 질문과 답변이 누적되고, 새 주제는 새 대화에서 다시 시작합니다.</p>
               </div>
             )}
+            <div ref={messageEndRef} />
           </div>
 
           <form className="chat-form" onSubmit={handleMessageSubmit}>

@@ -42,7 +42,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: '법률 챗봇' })).toBeInTheDocument();
     expect(screen.getByLabelText('법 분야')).toBeInTheDocument();
     expect(screen.getByLabelText('메시지')).toBeDisabled();
-    expect(screen.getByText('질문을 입력해 대화를 시작하세요')).toBeInTheDocument();
+    expect(screen.getByText('로그인 후 채팅을 시작하세요')).toBeInTheDocument();
   });
 
   it('logs in, creates a chat session, sends a message, and renders sources', async () => {
@@ -51,6 +51,8 @@ describe('App', () => {
       title: '계약 불이행 책임',
       created_at: '2026-06-14T10:00:00',
       updated_at: '2026-06-14T10:00:00',
+      message_count: 2,
+      last_message_preview: '검색 근거에 기반한 답변입니다.',
     };
     mockedLogin.mockResolvedValue({
       user: { id: 1, email: 'user@example.com', is_active: true },
@@ -95,11 +97,13 @@ describe('App', () => {
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '새 대화' }));
+    expect(mockedCreateChatSession).not.toHaveBeenCalled();
     await userEvent.type(screen.getByLabelText('메시지'), '계약 불이행 책임은 무엇인가요?');
     await userEvent.click(screen.getByRole('button', { name: '보내기' }));
 
     expect(screen.getByText('계약 불이행 책임은 무엇인가요?')).toBeInTheDocument();
     await waitFor(() => {
+      expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?');
       expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?', '01_civil_law');
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();

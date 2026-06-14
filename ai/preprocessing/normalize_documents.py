@@ -146,21 +146,36 @@ def normalize_document(path: Path, raw_dir: Path) -> dict[str, Any] | None:
     }
 
 
-def iter_json_files(raw_dir: Path) -> Iterable[Path]:
+def iter_json_files(raw_dir: Path, domain_code_filter: str | None = None) -> Iterable[Path]:
     # Keep this streaming-friendly. The raw dataset has hundreds of thousands of
     # files, so only sort the top-level domain folders and stream the files below.
     domain_dirs = [path for path in raw_dir.iterdir() if path.is_dir()]
     for domain_dir in sorted(domain_dirs, key=lambda path: path.name):
+        if domain_code_filter and domain_dir.name != domain_code_filter:
+            continue
         yield from domain_dir.rglob("*.json")
+
+
+def temp_output_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.name}.tmp")
 
 
 def write_jsonl(
     raw_dir: Path,
     output_path: Path,
+    domain_code_filter: str | None,
+    start_offset: int,
     max_documents: int | None,
     max_per_domain: int | None,
+    progress_interval: int,
 ) -> dict[str, Any]:
+    if start_offset < 0:
+        raise ValueError("start_offset must be 0 or greater.")
+    if progress_interval < 0:
+        raise ValueError("progress_interval must be 0 or greater.")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_path = temp_output_path(output_path)
 
     stats: Counter[str] = Counter()
     domain_counts: Counter[str] = Counter()
@@ -169,12 +184,20 @@ def write_jsonl(
         path.name
         for path in raw_dir.iterdir()
         if path.is_dir()
+        and (domain_code_filter is None or path.name == domain_code_filter)
     }
+    if domain_code_filter and domain_code_filter not in domain_targets:
+        raise ValueError(f"Unknown domain code: {domain_code_filter}")
 
-    with output_path.open("w", encoding="utf-8", newline="\n") as file:
-        for path in iter_json_files(raw_dir):
-            stats["json_files_seen"] += 1
+    with write_path.open("w", encoding="utf-8", newline="\n") as file:
+        for path in iter_json_files(raw_dir, domain_code_filter):
             domain_code, _ = get_domain(path, raw_dir)
+            if stats["json_files_seen"] < start_offset:
+                stats["json_files_seen"] += 1
+                stats["skipped_by_offset"] += 1
+                continue
+
+            stats["json_files_seen"] += 1
             if max_per_domain and domain_counts[domain_code] >= max_per_domain:
                 stats["skipped_by_domain_limit"] += 1
                 continue
@@ -194,6 +217,15 @@ def write_jsonl(
             domain_counts[document["domain_code"]] += 1
             source_type_counts[document["source_type"]] += 1
 
+            if progress_interval and stats["documents_written"] % progress_interval == 0:
+                print(
+                    "progress: "
+                    f"json_files_seen={stats['json_files_seen']} "
+                    f"documents_written={stats['documents_written']} "
+                    f"domains={dict(sorted(domain_counts.items()))}",
+                    flush=True,
+                )
+
             if max_documents and stats["documents_written"] >= max_documents:
                 break
 
@@ -206,9 +238,15 @@ def write_jsonl(
                 if filled_domains == domain_targets:
                     break
 
+    write_path.replace(output_path)
+
     return {
         "raw_dir": str(raw_dir),
         "output_path": str(output_path),
+        "domain_code": domain_code_filter,
+        "start_offset": start_offset,
+        "max_documents": max_documents,
+        "max_per_domain": max_per_domain,
         "stats": dict(stats),
         "domains": dict(sorted(domain_counts.items())),
         "source_types": dict(sorted(source_type_counts.items())),
@@ -219,14 +257,25 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Normalize AI Hub legal JSON files to JSONL documents.")
     parser.add_argument("--raw-dir", type=Path, default=DEFAULT_RAW_DIR)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument("--domain-code", choices=sorted(DOMAIN_LABELS))
+    parser.add_argument("--start-offset", type=int, default=0)
     parser.add_argument("--max-documents", type=int, default=None)
     parser.add_argument("--max-per-domain", type=int, default=None)
+    parser.add_argument("--progress-interval", type=int, default=1000)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    summary = write_jsonl(args.raw_dir, args.output, args.max_documents, args.max_per_domain)
+    summary = write_jsonl(
+        raw_dir=args.raw_dir,
+        output_path=args.output,
+        domain_code_filter=args.domain_code,
+        start_offset=args.start_offset,
+        max_documents=args.max_documents,
+        max_per_domain=args.max_per_domain,
+        progress_interval=args.progress_interval,
+    )
     summary_path = args.output.with_suffix(".summary.json")
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 

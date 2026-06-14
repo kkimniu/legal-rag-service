@@ -156,17 +156,24 @@ chunk 샘플 생성:
 
 전체 색인 전 규모/비용 추정:
 
-먼저 전체 원본 데이터를 표준 문서와 chunk로 변환합니다. 이 단계는 OpenAI API를 호출하지 않지만, 데이터가 커서 시간이 걸리고 `data/processed/`, `data/chunks/` 아래에 큰 파일을 생성합니다.
+먼저 원본 데이터를 분야별/배치별 표준 문서와 chunk로 변환합니다. 이 단계는 OpenAI API를 호출하지 않지만, 데이터가 커서 시간이 걸립니다. 완료 전에는 `.tmp` 파일에 쓰고, 성공하면 최종 `.jsonl`로 교체됩니다.
 
 ```powershell
-.\.venv\Scripts\python.exe ai\preprocessing\normalize_documents.py
-.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py
+.\.venv\Scripts\python.exe ai\preprocessing\normalize_documents.py --domain-code 01_civil_law --start-offset 0 --max-documents 10000 --output data\processed\legal_documents.civil.000000.jsonl
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.civil.000000.jsonl --output data\chunks\legal_chunks.civil.000000.jsonl
 ```
 
-전체 chunk 파일이 생성되면 규모와 비용을 추정합니다.
+다음 배치는 offset을 배치 크기만큼 증가시켜 생성합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.jsonl --output data\processed\index_estimate.full.json
+.\.venv\Scripts\python.exe ai\preprocessing\normalize_documents.py --domain-code 01_civil_law --start-offset 10000 --max-documents 10000 --output data\processed\legal_documents.civil.010000.jsonl
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.civil.010000.jsonl --output data\chunks\legal_chunks.civil.010000.jsonl
+```
+
+생성한 chunk 파일의 규모와 비용을 추정합니다.
+
+```powershell
+.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.civil.000000.jsonl --output data\processed\index_estimate.civil.000000.json
 ```
 
 전체 원본 파일 수와 중간 샘플 통계를 사용해 full index를 projection:
@@ -175,23 +182,22 @@ chunk 샘플 생성:
 .\.venv\Scripts\python.exe ai\embeddings\project_full_index.py --output data\processed\index_projection.full.json
 ```
 
-전체 색인은 오래 걸리므로 작은 배치 단위로 나눠 실행합니다. 먼저 dry run으로 첫 배치 입력을 확인합니다.
+전체 색인은 오래 걸리므로 작은 배치 파일 단위로 나눠 실행합니다. 먼저 dry run으로 첫 배치 입력을 확인합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 0 --max-chunks 10000 --dry-run
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.civil.000000.jsonl --collection-name legal_chunks_full --dry-run
 ```
 
 첫 실제 배치만 컬렉션을 초기화합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 0 --max-chunks 10000 --reset-collection --skip-existing --max-retries 8 --retry-base-seconds 3
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.civil.000000.jsonl --collection-name legal_chunks_full --reset-collection --skip-existing --max-retries 8 --retry-base-seconds 3
 ```
 
-다음 배치부터는 `--reset-collection` 없이 offset만 증가시킵니다.
+다음 배치부터는 `--reset-collection` 없이 다른 chunk 배치 파일을 추가합니다.
 
 ```powershell
-.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 10000 --max-chunks 10000 --skip-existing --max-retries 8 --retry-base-seconds 3
-.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.jsonl --collection-name legal_chunks_full --start-offset 20000 --max-chunks 10000 --skip-existing --max-retries 8 --retry-base-seconds 3
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\legal_chunks.civil.010000.jsonl --collection-name legal_chunks_full --skip-existing --max-retries 8 --retry-base-seconds 3
 ```
 
 중간에 끊긴 배치는 같은 명령을 다시 실행합니다. `--skip-existing`이 이미 저장된 chunk id를 건너뛰므로 같은 범위를 안전하게 재시도할 수 있습니다.

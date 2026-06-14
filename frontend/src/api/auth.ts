@@ -32,12 +32,15 @@ function storeToken(token: string) {
 
 export async function register(email: string, password: string): Promise<AuthResult> {
   try {
-    const response = await api.post<User>('/auth/register', { email, password });
-    return {
-      user: response.data,
-      token: null,
-      message: '회원가입이 완료되었습니다. 로그인해주세요.',
-    };
+    await api.post<User>('/auth/register', { email, password });
+    const loginResult = await login(email, password);
+    if (loginResult.user) {
+      return {
+        ...loginResult,
+        message: '회원가입 후 로그인되었습니다.',
+      };
+    }
+    return loginResult;
   } catch {
     return {
       user: null,

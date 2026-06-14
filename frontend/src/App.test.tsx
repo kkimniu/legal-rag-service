@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import { fetchCurrentUser, login } from './api/auth';
+import { fetchCurrentUser, login, register } from './api/auth';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -22,6 +22,7 @@ vi.mock('./api/chat', () => ({
 
 const mockedFetchCurrentUser = vi.mocked(fetchCurrentUser);
 const mockedLogin = vi.mocked(login);
+const mockedRegister = vi.mocked(register);
 const mockedCreateChatSession = vi.mocked(createChatSession);
 const mockedFetchChatSessions = vi.mocked(fetchChatSessions);
 const mockedFetchChatMessages = vi.mocked(fetchChatMessages);
@@ -102,5 +103,24 @@ describe('App', () => {
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
     expect(screen.getByText('검색 근거 1개')).toBeInTheDocument();
+  });
+
+  it('treats successful registration as an authenticated session', async () => {
+    mockedRegister.mockResolvedValue({
+      user: { id: 2, email: 'new@example.com', is_active: true },
+      token: 'new-token',
+      message: '회원가입 후 로그인되었습니다.',
+    });
+
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: '회원가입' }));
+    await userEvent.type(screen.getByLabelText('이메일'), 'new@example.com');
+    await userEvent.type(screen.getByLabelText('비밀번호'), 'Password123!');
+    await userEvent.click(screen.getByRole('button', { name: '가입하기' }));
+
+    expect(await screen.findByText('new@example.com')).toBeInTheDocument();
+    expect(screen.getByLabelText('메시지')).toBeEnabled();
+    expect(mockedFetchChatSessions).toHaveBeenCalled();
   });
 });

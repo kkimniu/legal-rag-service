@@ -98,6 +98,7 @@ describe('App', () => {
     await userEvent.type(screen.getByLabelText('메시지'), '계약 불이행 책임은 무엇인가요?');
     await userEvent.click(screen.getByRole('button', { name: '보내기' }));
 
+    expect(screen.getByText('계약 불이행 책임은 무엇인가요?')).toBeInTheDocument();
     await waitFor(() => {
       expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?', '01_civil_law');
     });

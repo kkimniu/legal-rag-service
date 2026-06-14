@@ -128,18 +128,31 @@ export function App() {
     }
 
     const content = message.trim();
+    const optimisticUserMessage: ChatMessage = {
+      id: -Date.now(),
+      role: 'user',
+      content,
+      sources: [],
+      created_at: new Date().toISOString(),
+    };
     setMessage('');
+    setMessages((items) => [...items, optimisticUserMessage]);
     setIsLoading(true);
     setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
 
     const turn = await sendChatMessage(session.id, content, domainCode);
     if (!turn) {
       setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
+      setMessages((items) => items.filter((item) => item.id !== optimisticUserMessage.id));
       setIsLoading(false);
       return;
     }
 
-    setMessages((items) => [...items, turn.user_message, turn.assistant_message]);
+    setMessages((items) => [
+      ...items.filter((item) => item.id !== optimisticUserMessage.id),
+      turn.user_message,
+      turn.assistant_message,
+    ]);
     setActiveSession(turn.session);
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
     setChatStatus(turn.is_ready ? 'RAG 답변이 생성되었습니다.' : 'RAG 준비가 필요합니다.');

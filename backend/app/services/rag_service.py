@@ -39,7 +39,8 @@ class RagService:
             )
 
         try:
-            sources = self._retrieve_sources(question, persist_directory, domain_code)
+            retrieval_question = self._build_retrieval_question(question, chat_history or [])
+            sources = self._retrieve_sources(retrieval_question, persist_directory, domain_code)
         except Exception as exc:
             return RagAskResponse(
                 answer=f"RAG 검색 중 오류가 발생했습니다: {exc}",
@@ -64,6 +65,24 @@ class RagService:
             )
 
         return RagAskResponse(answer=answer, sources=sources, is_ready=True)
+
+    def _build_retrieval_question(self, question: str, chat_history: list[tuple[str, str]]) -> str:
+        """Expand short follow-up questions with recent conversation context for retrieval."""
+        previous_user_turns = [
+            content.strip()
+            for role, content in chat_history
+            if role == "user" and content.strip()
+        ][-3:]
+        if not previous_user_turns:
+            return question
+
+        history = "\n".join(f"- {turn[:300]}" for turn in previous_user_turns)
+        return (
+            "이전 사용자 질문 맥락:\n"
+            f"{history}\n\n"
+            "현재 후속 질문:\n"
+            f"{question}"
+        )
 
     def _resolve_chroma_directory(self) -> Path | None:
         candidates = [

@@ -1,12 +1,14 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
-import { askLegalQuestion, deleteRagHistoryItem, fetchRagHistory, type RagAnswer, type RagHistoryItem } from './api/legalQa';
-
-const initialResult: RagAnswer = {
-  answer: '질문을 입력하면 검색된 법률 근거와 생성 답변이 여기에 표시됩니다.',
-  sources: [],
-  is_ready: false,
-};
+import {
+  createChatSession,
+  deleteChatSession,
+  fetchChatMessages,
+  fetchChatSessions,
+  sendChatMessage,
+  type ChatMessage,
+  type ChatSession,
+} from './api/chat';
 
 const domainOptions = [
   { value: '', label: '전체 분야' },
@@ -17,35 +19,36 @@ const domainOptions = [
 ];
 
 export function App() {
-  const [question, setQuestion] = useState('');
-  const [domainCode, setDomainCode] = useState('');
-  const [result, setResult] = useState<RagAnswer>(initialResult);
+  const [message, setMessage] = useState('');
+  const [domainCode, setDomainCode] = useState('01_civil_law');
   const [isLoading, setIsLoading] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('PostgreSQL과 마이그레이션 적용 후 로그인할 수 있습니다.');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [history, setHistory] = useState<RagHistoryItem[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
 
   useEffect(() => {
     fetchCurrentUser().then(async (user) => {
       if (user) {
         setCurrentUser(user);
         setAuthMessage('저장된 토큰으로 로그인 상태를 복원했습니다.');
-        setHistory(await fetchRagHistory());
+        await refreshSessions();
       }
     });
   }, []);
 
-  async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoading(true);
-    setResult(await askLegalQuestion(question, domainCode));
-    if (currentUser) {
-      setHistory(await fetchRagHistory());
+  async function refreshSessions() {
+    const nextSessions = await fetchChatSessions();
+    setSessions(nextSessions);
+    if (nextSessions.length > 0 && !activeSession) {
+      setActiveSession(nextSessions[0]);
+      setMessages(await fetchChatMessages(nextSessions[0].id));
     }
-    setIsLoading(false);
   }
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
@@ -54,46 +57,104 @@ export function App() {
     setAuthMessage(authResult.message);
     if (authResult.user) {
       setCurrentUser(authResult.user);
-      setHistory(await fetchRagHistory());
+      const nextSessions = await fetchChatSessions();
+      setSessions(nextSessions);
+      if (nextSessions.length > 0) {
+        setActiveSession(nextSessions[0]);
+        setMessages(await fetchChatMessages(nextSessions[0].id));
+      }
+      setChatStatus('대화방을 선택하거나 새 대화를 시작하세요.');
     }
   }
 
   function handleLogout() {
     clearStoredToken();
     setCurrentUser(null);
-    setHistory([]);
+    setSessions([]);
+    setActiveSession(null);
+    setMessages([]);
     setAuthMessage('로그아웃되었습니다.');
+    setChatStatus('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   }
 
-  function handleHistorySelect(item: RagHistoryItem) {
-    setQuestion(item.question);
-    setResult({
-      answer: item.answer,
-      sources: item.sources,
-      is_ready: true,
-    });
-  }
-
-  async function handleHistoryDelete(item: RagHistoryItem) {
-    const deleted = await deleteRagHistoryItem(item.id);
-    if (!deleted) {
+  async function handleCreateSession() {
+    const session = await createChatSession();
+    if (!session) {
+      setChatStatus('대화방을 만들 수 없습니다. 로그인 또는 DB 상태를 확인해주세요.');
       return;
     }
-    setHistory((items) => items.filter((historyItem) => historyItem.id !== item.id));
-    if (result.answer === item.answer && question === item.question) {
-      setResult(initialResult);
+    setSessions([session, ...sessions]);
+    setActiveSession(session);
+    setMessages([]);
+    setChatStatus('새 대화를 시작했습니다.');
+  }
+
+  async function handleSelectSession(session: ChatSession) {
+    setActiveSession(session);
+    setMessages(await fetchChatMessages(session.id));
+    setChatStatus('대화 이력을 불러왔습니다.');
+  }
+
+  async function handleDeleteSession(session: ChatSession) {
+    const deleted = await deleteChatSession(session.id);
+    if (!deleted) {
+      setChatStatus('대화방을 삭제하지 못했습니다.');
+      return;
     }
+    const nextSessions = sessions.filter((item) => item.id !== session.id);
+    setSessions(nextSessions);
+    if (activeSession?.id === session.id) {
+      setActiveSession(nextSessions[0] ?? null);
+      setMessages(nextSessions[0] ? await fetchChatMessages(nextSessions[0].id) : []);
+    }
+    setChatStatus('대화방을 삭제했습니다.');
+  }
+
+  async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!message.trim()) {
+      return;
+    }
+
+    let session = activeSession;
+    if (!session) {
+      session = await createChatSession(message.trim().slice(0, 40));
+      if (!session) {
+        setChatStatus('대화방을 만들 수 없습니다. 로그인 또는 DB 상태를 확인해주세요.');
+        return;
+      }
+      setActiveSession(session);
+      setSessions([session, ...sessions]);
+    }
+
+    const content = message.trim();
+    setMessage('');
+    setIsLoading(true);
+    setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
+
+    const turn = await sendChatMessage(session.id, content, domainCode);
+    if (!turn) {
+      setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
+      setIsLoading(false);
+      return;
+    }
+
+    setMessages((items) => [...items, turn.user_message, turn.assistant_message]);
+    setActiveSession(turn.session);
+    setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
+    setChatStatus(turn.is_ready ? 'RAG 답변이 생성되었습니다.' : 'RAG 준비가 필요합니다.');
+    setIsLoading(false);
   }
 
   return (
     <main className="app-shell">
-      <section className="qa-panel">
-        <header className="app-header">
-          <div>
+      <section className="chat-layout">
+        <aside className="sidebar">
+          <div className="brand-block">
             <p className="eyebrow">Legal RAG Service</p>
-            <h1>법률 질의응답</h1>
-            <p className="description">AI Hub 법률 데이터를 검색하고 근거 기반 답변을 생성하는 업무형 웹 서비스입니다.</p>
+            <h1>법률 챗봇</h1>
           </div>
+
           <section className="auth-panel" aria-label="인증">
             {currentUser ? (
               <div className="user-summary">
@@ -121,88 +182,107 @@ export function App() {
             )}
             <p className="auth-message">{authMessage}</p>
           </section>
-        </header>
 
-        <form className="question-form" onSubmit={handleQuestionSubmit}>
-          <div className="question-controls">
-            <label htmlFor="domain">법 분야</label>
-            <select id="domain" value={domainCode} onChange={(event) => setDomainCode(event.target.value)}>
-              {domainOptions.map((option) => (
-                <option key={option.value || 'all'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label htmlFor="question">질문</label>
-          <textarea
-            id="question"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="예: 임대차 계약 해지 통보는 언제까지 해야 하나요?"
-            rows={5}
-          />
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? '검색 중...' : '질문하기'}
-          </button>
-        </form>
-
-        <section className="answer-box" aria-live="polite">
-          <div className="answer-heading">
-            <h2>답변</h2>
-            <span className={result.is_ready ? 'status-ready' : 'status-waiting'}>
-              {result.is_ready ? 'RAG 연결됨' : '준비 중'}
-            </span>
-          </div>
-          <p>{result.answer}</p>
-        </section>
-
-        {result.sources.length > 0 && (
-          <section className="sources-section">
-            <h2>검색 근거</h2>
-            <div className="sources-list">
-              {result.sources.map((source, index) => (
-                <article className="source-item" key={source.id}>
-                  <div className="source-meta">
-                    <span>근거 {index + 1}</span>
-                    <span>{source.domain_name ?? '분야 미상'}</span>
-                    {source.score !== null && source.score !== undefined && <span>거리 {source.score.toFixed(3)}</span>}
-                  </div>
-                  <h3>{source.title ?? '제목 없음'}</h3>
-                  <p>{source.text}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {currentUser && (
-          <section className="history-section">
-            <div className="section-heading">
-              <h2>최근 질문 이력</h2>
-              <button type="button" className="secondary-button" onClick={async () => setHistory(await fetchRagHistory())}>
-                새로고침
-              </button>
-            </div>
-            {history.length > 0 ? (
-              <div className="history-list">
-                {history.map((item) => (
-                  <article className="history-item" key={item.id}>
-                    <button type="button" className="history-open-button" onClick={() => handleHistorySelect(item)}>
-                      <span>{item.question}</span>
-                      <time>{new Date(item.created_at).toLocaleString('ko-KR')}</time>
-                    </button>
-                    <button type="button" className="history-delete-button" onClick={() => handleHistoryDelete(item)}>
-                      삭제
-                    </button>
-                  </article>
-                ))}
+          {currentUser && (
+            <section className="session-panel">
+              <div className="section-heading">
+                <h2>대화 목록</h2>
+                <button type="button" className="secondary-button" onClick={handleCreateSession}>
+                  새 대화
+                </button>
               </div>
+              {sessions.length > 0 ? (
+                <div className="session-list">
+                  {sessions.map((session) => (
+                    <article className="session-item" key={session.id}>
+                      <button
+                        type="button"
+                        className={activeSession?.id === session.id ? 'session-open-button active-session' : 'session-open-button'}
+                        onClick={() => handleSelectSession(session)}
+                      >
+                        <span>{session.title}</span>
+                        <time>{new Date(session.updated_at).toLocaleString('ko-KR')}</time>
+                      </button>
+                      <button type="button" className="session-delete-button" onClick={() => handleDeleteSession(session)}>
+                        삭제
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-state">아직 저장된 대화가 없습니다.</p>
+              )}
+            </section>
+          )}
+        </aside>
+
+        <section className="chat-panel" aria-label="챗봇">
+          <header className="chat-header">
+            <div>
+              <h2>{activeSession?.title ?? '새 법률 상담 대화'}</h2>
+              <p>{chatStatus}</p>
+            </div>
+            <div className="domain-control">
+              <label htmlFor="domain">법 분야</label>
+              <select id="domain" value={domainCode} onChange={(event) => setDomainCode(event.target.value)}>
+                {domainOptions.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </header>
+
+          <div className="message-list" aria-live="polite">
+            {messages.length > 0 ? (
+              messages.map((item) => (
+                <article className={`message-bubble ${item.role}`} key={item.id}>
+                  <span>{item.role === 'user' ? '사용자' : 'AI'}</span>
+                  <p>{item.content}</p>
+                  {item.sources.length > 0 && (
+                    <details>
+                      <summary>검색 근거 {item.sources.length}개</summary>
+                      <div className="sources-list">
+                        {item.sources.map((source, index) => (
+                          <section className="source-item" key={`${item.id}-${source.id}`}>
+                            <div className="source-meta">
+                              <span>근거 {index + 1}</span>
+                              <span>{source.domain_name ?? '분야 미상'}</span>
+                              {source.score !== null && source.score !== undefined && <span>거리 {source.score.toFixed(3)}</span>}
+                            </div>
+                            <h3>{source.title ?? '제목 없음'}</h3>
+                            <p>{source.text}</p>
+                          </section>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </article>
+              ))
             ) : (
-              <p className="empty-state">로그인 상태에서 질문하면 이력이 저장됩니다.</p>
+              <div className="empty-chat">
+                <h2>질문을 입력해 대화를 시작하세요</h2>
+                <p>현재 선택한 컬렉션 기준으로 법률 근거를 검색하고 답변과 근거를 함께 저장합니다.</p>
+              </div>
             )}
-          </section>
-        )}
+          </div>
+
+          <form className="chat-form" onSubmit={handleMessageSubmit}>
+            <label htmlFor="message">메시지</label>
+            <textarea
+              id="message"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="예: 계약 불이행으로 손해가 발생한 경우 손해배상 책임은 어떻게 판단되나요?"
+              rows={3}
+              disabled={!currentUser || isLoading}
+            />
+            <button type="submit" disabled={!currentUser || isLoading}>
+              {isLoading ? '답변 생성 중...' : '보내기'}
+            </button>
+          </form>
+        </section>
       </section>
     </main>
   );

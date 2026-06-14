@@ -9,9 +9,9 @@ AI Hub 법률 데이터를 기반으로 하는 RAG(Retrieval-Augmented Generatio
 | 항목 | 상태 |
 | --- | --- |
 | Branch | `develop` |
-| Backend | FastAPI 기본 구조, health API, RAG ask API |
+| Backend | FastAPI 기본 구조, health API, RAG ask API, Chat API |
 | Auth | 회원가입, 로그인, JWT 발급, 현재 사용자 조회 API |
-| Frontend | 질문 입력, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI, 최근 질문 이력 조회/삭제 UI |
+| Frontend | 챗봇 UI, 생성 답변, 검색 근거 UI, 로그인/회원가입 UI, 대화방 조회/삭제 UI |
 | AI preprocessing | 데이터 구조 점검, 표준 JSONL 변환, chunk 생성 |
 | Embeddings | OpenAI embedding -> ChromaDB 색인 스크립트 |
 | Sample index | `legal_chunks_sample` 1,000개, `legal_chunks_medium` 4,000개 균형 샘플 색인 확인 |
@@ -67,6 +67,12 @@ CHROMA_COLLECTION_NAME=legal_chunks_sample
 
 ```env
 CHROMA_COLLECTION_NAME=legal_chunks_medium
+```
+
+민사법 probe 색인을 사용할 때:
+
+```env
+CHROMA_COLLECTION_NAME=legal_chunks_civil_probe
 ```
 
 ## 로컬 실행
@@ -311,7 +317,7 @@ Invoke-RestMethod `
 프론트엔드에도 로그인/회원가입 패널이 있습니다. PostgreSQL과 Alembic 마이그레이션이 준비되지 않은 상태에서는 인증 요청이 실패 안내를 표시합니다.
 
 로그인 상태에서 RAG 질문을 보내면 질문, 답변, 검색 근거가 `rag_queries` 테이블에 저장됩니다.
-프론트엔드에서는 로그인한 사용자의 최근 질문 이력을 조회하고, 이력 항목을 눌러 저장된 답변과 근거를 다시 열 수 있습니다. 필요 없는 이력은 항목별로 삭제할 수 있습니다.
+프론트엔드는 챗봇 UI를 기본 화면으로 사용하며, 로그인한 사용자의 대화방과 메시지를 `chat_sessions`, `chat_messages` 테이블에 저장합니다.
 
 최근 질문 이력 조회:
 
@@ -320,6 +326,47 @@ $token = "<access_token>"
 Invoke-RestMethod `
   -Method Get `
   -Uri http://localhost:8000/api/v1/rag/history `
+  -Headers @{ Authorization = "Bearer $token" }
+```
+
+## Chat API
+
+챗봇 기능은 로그인한 사용자만 사용할 수 있습니다. 먼저 Alembic 마이그레이션을 적용해 `chat_sessions`, `chat_messages` 테이블을 생성합니다.
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+대화방 생성:
+
+```powershell
+$token = "<access_token>"
+$session = Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/v1/chat/sessions `
+  -ContentType "application/json" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -Body '{"title":"민사법 상담"}'
+```
+
+메시지 전송:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8000/api/v1/chat/sessions/$($session.id)/messages" `
+  -ContentType "application/json" `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -Body '{"content":"계약 불이행으로 손해가 발생한 경우 책임은 어떻게 판단되나요?","domain_code":"01_civil_law"}'
+```
+
+대화방 목록 조회:
+
+```powershell
+Invoke-RestMethod `
+  -Method Get `
+  -Uri http://localhost:8000/api/v1/chat/sessions `
   -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -376,10 +423,10 @@ npm.cmd run test
 2. 마이그레이션 적용: `docker compose exec backend python -m alembic upgrade head`
 3. 브라우저 접속: `http://localhost:5173`
 4. 회원가입 또는 로그인
-5. 법 분야를 선택하고 질문 입력
+5. 법 분야를 선택하고 챗봇 메시지 입력
 6. 답변, 검색 근거, RAG 연결 상태 확인
-7. 최근 질문 이력에서 방금 질문을 다시 열기
-8. 이력 삭제 버튼으로 항목 삭제
+7. 대화 목록에서 방금 대화를 다시 열기
+8. 대화 삭제 버튼으로 항목 삭제
 9. API 문서 확인: `http://localhost:8000/docs`
 
 ## RAG 검색 품질 평가
@@ -425,8 +472,8 @@ npm.cmd run test
 
 ## 다음 작업
 
-1. 검색 품질 확인 결과를 바탕으로 chunk 크기와 top-k 조정
-2. 답변 품질 평가용 테스트셋 작성
+1. 챗봇 화면에서 민사법 probe 답변 품질 수동 확인
+2. 답변 품질 평가용 테스트셋을 챗봇 API 기준으로 확장
 3. 전체 데이터 변환 및 `legal_chunks_full` 배치 색인
-4. 프론트 테스트 코드 추가
+4. 대화 제목 수정, 메시지 재생성 같은 챗봇 편의 기능 추가
 5. 배포 환경용 Docker 설정 분리

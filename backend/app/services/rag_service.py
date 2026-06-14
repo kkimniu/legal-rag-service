@@ -16,7 +16,12 @@ class RagService:
     def __init__(self, top_k: int | None = None) -> None:
         self.top_k = top_k or settings.rag_top_k
 
-    def answer(self, question: str, domain_code: str | None = None) -> RagAskResponse:
+    def answer(
+        self,
+        question: str,
+        domain_code: str | None = None,
+        chat_history: list[tuple[str, str]] | None = None,
+    ) -> RagAskResponse:
         """Retrieve legal chunks and generate a grounded Korean answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
             return RagAskResponse(
@@ -50,7 +55,7 @@ class RagService:
             )
 
         try:
-            answer = self._generate_answer(question, sources)
+            answer = self._generate_answer(question, sources, chat_history=chat_history)
         except Exception as exc:
             return RagAskResponse(
                 answer=f"근거 chunk는 찾았지만 답변 생성 중 오류가 발생했습니다: {exc}",
@@ -199,13 +204,19 @@ class RagService:
 
         return keywords[:3]
 
-    def _generate_answer(self, question: str, sources: list[RagSource]) -> str:
+    def _generate_answer(
+        self,
+        question: str,
+        sources: list[RagSource],
+        chat_history: list[tuple[str, str]] | None = None,
+    ) -> str:
         model = ChatOpenAI(
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
         )
         context = self._format_context(sources)
+        conversation_context = self._format_chat_history(chat_history or [])
         response = model.invoke(
             [
                 SystemMessage(
@@ -213,11 +224,13 @@ class RagService:
                         "당신은 한국 법률 질의응답 서비스를 돕는 RAG 어시스턴트입니다. "
                         "반드시 제공된 근거 안에서만 답변하고, 근거에 없는 내용은 추측하지 마세요. "
                         "근거에 없는 법률요건, 예시, 일반론은 작성하지 말고 근거 부족을 명확히 말하세요. "
+                        "대화 맥락은 사용자의 후속 질문 의도를 이해하는 데만 사용하고, 법률 내용은 검색된 근거로만 답하세요. "
                         "답변은 한국어로 작성하고, 법률 자문이 아니라 참고 정보라는 점을 간단히 밝혀주세요."
                     )
                 ),
                 HumanMessage(
                     content=(
+                        f"최근 대화:\n{conversation_context}\n\n"
                         f"질문:\n{question}\n\n"
                         f"검색된 근거:\n{context}\n\n"
                         "위 근거만 사용해 핵심 답변을 3~6문장으로 작성하세요. "
@@ -239,6 +252,18 @@ class RagService:
         if not has_notice:
             answer = f"{answer}\n\n{disclaimer}"
         return answer
+
+    def _format_chat_history(self, chat_history: list[tuple[str, str]]) -> str:
+        if not chat_history:
+            return "최근 대화 없음"
+
+        lines = []
+        for role, content in chat_history[-6:]:
+            label = "사용자" if role == "user" else "AI"
+            clipped = content.strip()[:500]
+            if clipped:
+                lines.append(f"{label}: {clipped}")
+        return "\n".join(lines) or "최근 대화 없음"
 
     def _format_context(self, sources: list[RagSource]) -> str:
         chunks = []

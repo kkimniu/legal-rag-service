@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "legal_chunks"
+    precedent_chroma_collection_name: str = "precedent_chunks_probe_10k"
     rag_top_k: int = 5
     rag_context_max_chars: int = 6000
     openai_temperature: float = 0.2

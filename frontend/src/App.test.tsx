@@ -85,7 +85,7 @@ describe('App', () => {
             source_type: 'qa',
             text: '손해배상 근거 본문입니다.',
             score: 0.2,
-            metadata: {},
+            metadata: { evidence_type: 'precedent', meta_case_number: '2024다12345' },
           },
         ],
       },
@@ -110,6 +110,8 @@ describe('App', () => {
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
     expect(screen.getByText('검색 근거 1개')).toBeInTheDocument();
+    expect(screen.getByText('판례 근거 1')).toBeInTheDocument();
+    expect(screen.getByText('2024다12345')).toBeInTheDocument();
   });
 
   it('treats successful registration as an authenticated session', async () => {

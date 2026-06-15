@@ -351,6 +351,16 @@ summary {
   padding: 4px 8px;
 }
 
+.source-meta .statute-badge {
+  background: #e4f3ec;
+  color: #1f6b4d;
+}
+
+.source-meta .precedent-badge {
+  background: #eef0ff;
+  color: #3646a3;
+}
+
 .source-item h3 {
   margin: 0 0 8px;
   font-size: 15px;

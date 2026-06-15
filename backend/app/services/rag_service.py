@@ -22,7 +22,7 @@ class RagService:
         domain_code: str | None = None,
         chat_history: list[tuple[str, str]] | None = None,
     ) -> RagAskResponse:
-        """Retrieve legal chunks and generate a grounded Korean answer."""
+        """Retrieve legal/statute chunks and precedent chunks, then generate a grounded answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
             return RagAskResponse(
                 answer="OpenAI API 키가 아직 설정되지 않아 RAG 검색을 실행할 수 없습니다.",
@@ -50,7 +50,7 @@ class RagService:
 
         if not sources:
             return RagAskResponse(
-                answer="질문과 관련된 법률 근거 chunk를 찾지 못했습니다.",
+                answer="질문과 관련된 법률 또는 판례 근거를 찾지 못했습니다.",
                 sources=[],
                 is_ready=True,
             )
@@ -59,7 +59,7 @@ class RagService:
             answer = self._generate_answer(question, sources, chat_history=chat_history)
         except Exception as exc:
             return RagAskResponse(
-                answer=f"근거 chunk는 찾았지만 답변 생성 중 오류가 발생했습니다: {exc}",
+                answer=f"근거는 찾았지만 답변 생성 중 오류가 발생했습니다: {exc}",
                 sources=sources,
                 is_ready=True,
             )
@@ -67,7 +67,7 @@ class RagService:
         return RagAskResponse(answer=answer, sources=sources, is_ready=True)
 
     def _build_retrieval_question(self, question: str, chat_history: list[tuple[str, str]]) -> str:
-        """Expand short follow-up questions with recent conversation context for retrieval."""
+        """Expand short follow-up questions with recent user context for retrieval."""
         previous_user_turns = [
             content.strip()
             for role, content in chat_history
@@ -77,12 +77,7 @@ class RagService:
             return question
 
         history = "\n".join(f"- {turn[:300]}" for turn in previous_user_turns)
-        return (
-            "이전 사용자 질문 맥락:\n"
-            f"{history}\n\n"
-            "현재 후속 질문:\n"
-            f"{question}"
-        )
+        return f"이전 사용자 질문 맥락:\n{history}\n\n현재 후속 질문:\n{question}"
 
     def _resolve_chroma_directory(self) -> Path | None:
         candidates = [
@@ -105,33 +100,70 @@ class RagService:
         domain_code: str | None = None,
     ) -> list[RagSource]:
         client = chromadb.PersistentClient(path=str(persist_directory))
-        collection = client.get_collection(settings.chroma_collection_name)
         embeddings = OpenAIEmbeddings(
             model=settings.openai_embedding_model,
             api_key=settings.openai_api_key,
         )
         query_embedding = embeddings.embed_query(retrieval_question)
+
+        statute_sources = self._retrieve_collection_sources(
+            client=client,
+            collection_name=settings.chroma_collection_name,
+            evidence_type="statute",
+            query_embedding=query_embedding,
+            question=original_question,
+            domain_code=domain_code,
+            n_results=self.top_k,
+        )
+        precedent_sources = self._retrieve_collection_sources(
+            client=client,
+            collection_name=settings.precedent_chroma_collection_name,
+            evidence_type="precedent",
+            query_embedding=query_embedding,
+            question=original_question,
+            domain_code=domain_code,
+            n_results=self.top_k,
+        )
+
+        return self._merge_sources(statute_sources[: self.top_k], precedent_sources[: self.top_k])
+
+    def _retrieve_collection_sources(
+        self,
+        client: Any,
+        collection_name: str,
+        evidence_type: str,
+        query_embedding: list[float],
+        question: str,
+        domain_code: str | None,
+        n_results: int,
+    ) -> list[RagSource]:
+        try:
+            collection = client.get_collection(collection_name)
+        except Exception:
+            return []
+
         query_kwargs: dict[str, Any] = {
             "query_embeddings": [query_embedding],
-            "n_results": self.top_k,
+            "n_results": n_results,
             "include": ["documents", "metadatas", "distances"],
         }
         if domain_code:
             query_kwargs["where"] = {"domain_code": domain_code}
 
         result = collection.query(**query_kwargs)
-        sources = self._sources_from_result(result)
+        sources = self._sources_from_result(result, evidence_type=evidence_type)
 
         keyword_sources = self._retrieve_keyword_sources(
             collection=collection,
-            question=original_question,
+            question=question,
             query_embedding=query_embedding,
             domain_code=domain_code,
+            evidence_type=evidence_type,
         )
         if keyword_sources:
-            sources = self._merge_sources(sources[:2], keyword_sources, sources[2:])
+            sources = self._merge_sources(keyword_sources, sources)
 
-        return sources[: self.top_k]
+        return sources[:n_results]
 
     def _retrieve_keyword_sources(
         self,
@@ -139,6 +171,7 @@ class RagService:
         question: str,
         query_embedding: list[float],
         domain_code: str | None,
+        evidence_type: str,
     ) -> list[RagSource]:
         sources: list[RagSource] = []
         for keyword in self._extract_keywords(question):
@@ -156,10 +189,10 @@ class RagService:
             except Exception:
                 continue
 
-            sources.extend(self._sources_from_result(result))
+            sources.extend(self._sources_from_result(result, evidence_type=evidence_type))
         return sources
 
-    def _sources_from_result(self, result: dict[str, Any]) -> list[RagSource]:
+    def _sources_from_result(self, result: dict[str, Any], evidence_type: str) -> list[RagSource]:
         documents = result.get("documents", [[]])[0]
         metadatas = result.get("metadatas", [[]])[0]
         distances = result.get("distances", [[]])[0]
@@ -167,6 +200,7 @@ class RagService:
         sources = []
         for chunk_id, text, metadata, distance in zip(ids, documents, metadatas, distances, strict=False):
             safe_metadata = self._safe_metadata(metadata)
+            safe_metadata["evidence_type"] = evidence_type
             sources.append(
                 RagSource(
                     id=str(chunk_id),
@@ -195,25 +229,21 @@ class RagService:
         stopwords = {
             "어떤",
             "무엇",
-            "무엇인가요",
+            "무엇인가",
             "하나요",
-            "필요한가요",
+            "필요한가",
             "확인해야",
             "하려면",
-            "판단할",
-            "때",
+            "판단",
+            "관련",
             "대해",
-            "관해",
             "위해",
             "통해",
-            "위한",
             "대한",
-            "관한",
-            "이미",
             "있나요",
-            "있는",
+            "되는",
         }
-        particles = ("으로", "에서", "에게", "에는", "이라면", "라면", "인가요", "하나요", "가", "이", "을", "를", "은", "는", "의", "에", "도")
+        particles = ("으로", "에서", "에게", "에는", "이라면", "라면", "인가요", "하나요", "가", "이", "을", "를", "은", "는", "의", "도")
         keywords: list[str] = []
 
         for token in re.findall(r"[0-9A-Za-z가-힣]+", question):
@@ -252,32 +282,38 @@ class RagService:
                 SystemMessage(
                     content=(
                         "당신은 한국 법률 질의응답 서비스를 돕는 RAG 어시스턴트입니다. "
-                        "반드시 제공된 근거 안에서만 답변하고, 근거에 없는 내용은 추측하지 마세요. "
-                        "근거에 없는 법률요건, 예시, 일반론은 작성하지 말고 근거 부족을 명확히 말하세요. "
-                        "대화 맥락은 사용자의 후속 질문 의도를 이해하는 데만 사용하고, 법률 내용은 검색된 근거로만 답하세요. "
-                        "답변은 한국어로 작성하고, 법률 자문이 아니라 참고 정보라는 점을 간단히 밝혀주세요."
+                        "반드시 제공된 법률 근거와 판례 근거 안에서만 답변하세요. "
+                        "근거에 없는 법률요건, 판례 취지, 결론은 추측하지 말고 근거 부족을 명확히 말하세요. "
+                        "답변은 아래 형식을 지키세요.\n\n"
+                        "답변 요약\n"
+                        "관련 법령\n"
+                        "- 법령명: ...\n"
+                        "- 조문/근거: ...\n"
+                        "관련 판례\n"
+                        "- 사건번호: ...\n"
+                        "- 사건명: ...\n"
+                        "- 판결요약: ...\n"
+                        "주의사항"
                     )
                 ),
                 HumanMessage(
                     content=(
-                        f"최근 대화:\n{conversation_context}\n\n"
+                        f"최근 대화\n{conversation_context}\n\n"
                         f"질문:\n{question}\n\n"
                         f"검색된 근거:\n{context}\n\n"
-                        "위 근거만 사용해 핵심 답변을 3~6문장으로 작성하세요. "
-                        "가능하면 어떤 근거를 참고했는지 문장 안에 짧게 언급하세요. "
-                        "질문한 법률요건이 근거에 직접 나오지 않으면, 요건을 추측해 나열하지 말고 "
-                        "현재 근거로는 직접 답하기 어렵다고 답하세요."
+                        "검색된 근거만 사용해서 한국어로 답변하세요. "
+                        "관련 판례가 없으면 '검색된 판례 근거가 부족합니다'라고 쓰세요. "
+                        "관련 법령이 없으면 '검색된 법령 근거가 부족합니다'라고 쓰세요."
                     )
                 ),
             ]
         )
         answer = str(response.content).strip()
-        disclaimer = "※ 이 답변은 검색된 법률 데이터에 기반한 참고 정보이며, 구체적인 사건에는 전문가 상담이 필요할 수 있습니다."
+        disclaimer = "이 답변은 검색된 법률/판례 데이터에 기반한 참고 정보이며, 구체적인 사건에는 전문가 상담이 필요할 수 있습니다."
         has_notice = (
             "참고 정보" in answer
-            or "참고정보" in answer
-            or "법률 자문" in answer
             or "전문가 상담" in answer
+            or "법률 자문" in answer
         )
         if not has_notice:
             answer = f"{answer}\n\n{disclaimer}"
@@ -302,8 +338,16 @@ class RagService:
         for index, source in enumerate(sources, start=1):
             title = source.title or "제목 없음"
             domain = source.domain_name or "분야 미상"
+            evidence_type = source.metadata.get("evidence_type")
+            evidence_label = "판례" if evidence_type == "precedent" else "법률"
+            case_number = source.metadata.get("meta_case_number") or source.metadata.get("case_number") or ""
+            court = source.metadata.get("meta_court") or source.metadata.get("court") or ""
+            decision_date = source.metadata.get("meta_decision_date") or source.metadata.get("decision_date") or ""
             text = source.text.strip()
-            header = f"[근거 {index}] 분야: {domain} / 제목: {title}\n"
+            header = (
+                f"[근거 {index}] 유형: {evidence_label} / 분야: {domain} / 제목: {title}"
+                f" / 사건번호: {case_number} / 법원: {court} / 선고일자: {decision_date}\n"
+            )
             available = max(0, remaining_chars - len(header))
             if available <= 0:
                 break

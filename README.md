@@ -50,6 +50,33 @@ chroma_db/        ChromaDB 로컬 저장소 (Git 제외)
 
 ---
 
+## 판례 데이터 전처리
+
+판례 원본은 `data/raw/precedents/incoming` 아래에 보관합니다. 원본은 삭제하거나 Git에 올리지 않고, 필요한 필드만 전처리해서 검색용 JSONL로 변환합니다.
+
+```powershell
+# 1. 판례 원본 JSON 정규화
+.\.venv\Scripts\python.exe ai\preprocessing\normalize_precedents.py --output data\processed\precedents\precedent_documents.sample.jsonl --max-documents 1000
+
+# 2. 판례 검색용 chunk 생성
+.\.venv\Scripts\python.exe ai\preprocessing\chunk_precedents.py --input data\processed\precedents\precedent_documents.sample.jsonl --output data\chunks\precedents\precedent_chunks.sample.jsonl
+
+# 3. 임베딩 전 dry-run 검증
+.\.venv\Scripts\python.exe ai\embeddings\build_chroma.py --input data\chunks\precedents\precedent_chunks.sample.jsonl --collection-name precedent_chunks_probe --dry-run
+```
+
+지원하는 입력 폴더:
+
+- `Sublabel`: 판례/행정심판 재결례 원문 메타데이터
+- `Training`, `Validation`: AI Hub 판결문 라벨링 데이터
+- `Other`: 판례 관련 QA 보조 데이터
+
+현재 판례 검색용 1만 건 균형 샘플 컬렉션은 `precedent_chunks_probe_10k`입니다. 도메인별 2,500건씩 정규화했고, 판례 검색 평가 20개 질문에서 키워드 보강 기준 20/20을 통과했습니다.
+
+법률+판례 답변 평가도 8개 질문 기준 8/8을 통과했습니다. 답변은 `답변 요약`, `관련 법령`, `관련 판례`, `주의사항` 형식을 따르도록 구성되어 있습니다.
+
+---
+
 ## 로컬 개발 환경 설정
 
 ### 1. 환경 변수

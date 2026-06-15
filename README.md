@@ -192,6 +192,8 @@ npm test
 
 ## Docker Compose 배포 (로컬/서버)
 
+운영 배포 환경변수, ChromaDB 볼륨, PostgreSQL 마이그레이션, smoke test 체크리스트는 [docs/deployment.md](docs/deployment.md)를 참고합니다.
+
 전체 스택을 컨테이너로 실행합니다.
 
 ```bash

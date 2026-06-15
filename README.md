@@ -36,6 +36,20 @@ chroma_db/        ChromaDB 로컬 저장소 (Git 제외)
 
 ---
 
+## 판례 검색 확장 설계
+
+기존 법률 QA/조문 검색 기반 RAG를 법령과 판례를 함께 활용하는 AI Legal Assistant로 확장하는 설계를 포함합니다.
+
+- 법령 컬렉션과 판례 컬렉션을 ChromaDB에서 분리
+- 판례 원본, 전처리 문서, chunk 산출물을 별도 관리
+- 사건번호, 사건명, 법원, 선고일, 판결요약 metadata 설계
+- 답변 형식: 답변 요약, 관련 법령, 관련 판례, 주의사항
+- 현재 FastAPI, SQLAlchemy, ChromaDB 구조를 유지하면서 확장
+
+상세 설계는 [docs/case-law-rag-extension.md](docs/case-law-rag-extension.md)를 참고합니다.
+
+---
+
 ## 로컬 개발 환경 설정
 
 ### 1. 환경 변수

@@ -120,6 +120,14 @@ Backend health:
 curl http://localhost:8000/api/v1/health
 ```
 
+Automated API smoke test:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_test.py --with-rag --with-chat
+```
+
+이 명령은 회원가입, 로그인, 현재 사용자 조회, RAG 질문, RAG 히스토리 저장/삭제, 채팅 세션 생성, 채팅 답변의 법률/판례 근거 포함 여부를 확인합니다. `--with-rag`, `--with-chat` 옵션은 OpenAI API를 호출하므로 비용이 발생할 수 있습니다.
+
 Swagger:
 
 ```text

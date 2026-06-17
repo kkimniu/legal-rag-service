@@ -1,0 +1,20 @@
+{"id":"precedent_civil_divorce_property","domain_code":"01_civil_law","question":"이혼 사건에서 재산분할과 위자료 판단에 관한 판례를 찾아줘","expected_terms":["이혼","재산분할","위자료"]}
+{"id":"precedent_civil_inheritance_limited_acceptance","domain_code":"01_civil_law","question":"상속한정승인과 상속포기에 관한 판례 근거를 알려줘","expected_terms":["상속","한정승인","상속포기"]}
+{"id":"precedent_civil_lease_deposit","domain_code":"01_civil_law","question":"임대차 보증금 반환 분쟁에서 참고할 판례가 있어?","expected_terms":["임대차","보증금","반환"]}
+{"id":"precedent_civil_tort_damages","domain_code":"01_civil_law","question":"불법행위 손해배상과 과실 판단에 관한 판례를 알려줘","expected_terms":["불법행위","손해배상","과실"]}
+{"id":"precedent_civil_provisional_attachment","domain_code":"01_civil_law","question":"가압류 취소나 보전처분과 관련된 민사 판례를 찾아줘","expected_terms":["가압류","취소","보전처분"]}
+{"id":"precedent_ip_trademark_similarity","domain_code":"02_intellectual_property_law","question":"상표가 서로 유사한지 판단하는 판례를 알려줘","expected_terms":["상표","유사","혼동"]}
+{"id":"precedent_ip_patent_scope","domain_code":"02_intellectual_property_law","question":"특허 권리범위확인 심판 관련 판례를 찾아줘","expected_terms":["특허","권리범위","확인"]}
+{"id":"precedent_ip_design_similarity","domain_code":"02_intellectual_property_law","question":"디자인권 침해에서 디자인 유사 여부를 본 판례가 있어?","expected_terms":["디자인","유사","침해"]}
+{"id":"precedent_ip_invalid_trial","domain_code":"02_intellectual_property_law","question":"등록상표나 특허 무효심판에 관한 판례 근거를 알려줘","expected_terms":["무효심판","등록상표","특허"]}
+{"id":"precedent_ip_copyright","domain_code":"02_intellectual_property_law","question":"저작권 침해와 실질적 유사성에 관한 판례를 찾아줘","expected_terms":["저작권","침해","유사성"]}
+{"id":"precedent_admin_tax_cancel","domain_code":"03_administrative_law","question":"과세처분 취소소송에서 참고할 행정 판례를 알려줘","expected_terms":["과세처분","취소","세무"]}
+{"id":"precedent_admin_discretion_abuse","domain_code":"03_administrative_law","question":"영업정지 처분이 재량권 일탈 남용인지 본 판례가 있어?","expected_terms":["영업정지","재량","일탈"]}
+{"id":"precedent_admin_information_disclosure","domain_code":"03_administrative_law","question":"정보공개 거부처분에 관한 판례나 재결례를 찾아줘","expected_terms":["정보공개","거부","처분"]}
+{"id":"precedent_admin_fair_trade_order","domain_code":"03_administrative_law","question":"공정거래 시정명령과 공동행위 관련 판례를 알려줘","expected_terms":["시정명령","공동행위","공정거래"]}
+{"id":"precedent_admin_appeal_decision","domain_code":"03_administrative_law","question":"행정심판 재결례에서 처분 취소가 인정된 사례를 찾아줘","expected_terms":["행정심판","재결","처분"]}
+{"id":"precedent_criminal_fraud","domain_code":"04_criminal_law","question":"사기죄에서 기망행위와 편취의사를 본 형사 판례를 알려줘","expected_terms":["사기","기망","편취"]}
+{"id":"precedent_criminal_embezzlement","domain_code":"04_criminal_law","question":"횡령죄 성립 여부에 관한 판례 근거를 찾아줘","expected_terms":["횡령","보관","불법영득"]}
+{"id":"precedent_criminal_self_defense","domain_code":"04_criminal_law","question":"정당방위가 인정되거나 부정된 형사 판례가 있어?","expected_terms":["정당방위","방위","상당성"]}
+{"id":"precedent_criminal_assault_injury","domain_code":"04_criminal_law","question":"폭행이나 상해 사건에서 책임을 판단한 판례를 알려줘","expected_terms":["폭행","상해","책임"]}
+{"id":"precedent_criminal_evidence","domain_code":"04_criminal_law","question":"형사재판에서 위법수집증거와 증거능력에 관한 판례를 찾아줘","expected_terms":["증거","위법수집","증거능력"]}

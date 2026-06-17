@@ -1,0 +1,8 @@
+{"id":"answer_civil_inheritance","domain_code":"01_civil_law","question":"상속한정승인과 상속포기에 관한 법률 근거와 판례를 같이 알려줘","expected_terms":["상속","한정승인","상속포기"]}
+{"id":"answer_civil_damages","domain_code":"01_civil_law","question":"계약을 이행하지 않아 손해배상을 청구하려면 어떤 법률 근거와 판례를 봐야 해?","expected_terms":["손해배상","계약","책임"]}
+{"id":"answer_ip_trademark","domain_code":"02_intellectual_property_law","question":"상표가 서로 유사한지 판단하는 법률 기준과 관련 판례를 알려줘","expected_terms":["상표","유사","혼동"]}
+{"id":"answer_ip_patent_scope","domain_code":"02_intellectual_property_law","question":"특허 권리범위확인 심판과 침해 판단에 관한 법률 근거와 판례를 알려줘","expected_terms":["특허","권리범위","침해"]}
+{"id":"answer_admin_tax","domain_code":"03_administrative_law","question":"과세처분 취소소송에서 주장할 수 있는 법률 근거와 판례를 알려줘","expected_terms":["과세처분","취소","세무"]}
+{"id":"answer_admin_discretion","domain_code":"03_administrative_law","question":"영업정지 처분이 재량권 일탈 남용인지 판단하는 법률 근거와 판례를 알려줘","expected_terms":["영업정지","재량","일탈"]}
+{"id":"answer_criminal_fraud","domain_code":"04_criminal_law","question":"사기죄가 성립하려면 어떤 법률 요건과 판례를 봐야 해?","expected_terms":["사기","기망","편취"]}
+{"id":"answer_criminal_evidence","domain_code":"04_criminal_law","question":"형사재판에서 위법수집증거와 증거능력에 관한 법률 근거와 판례를 알려줘","expected_terms":["증거","위법수집","증거능력"]}

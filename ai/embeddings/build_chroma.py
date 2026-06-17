@@ -129,7 +129,20 @@ def embed_documents_with_retry(
             return embeddings.embed_documents(texts)
         except Exception as exc:
             message = repr(exc).lower()
-            is_retryable = any(token in message for token in ("ratelimit", "rate_limit", "timeout", "temporarily"))
+            is_retryable = any(
+                token in message
+                for token in (
+                    "ratelimit",
+                    "rate_limit",
+                    "timeout",
+                    "temporarily",
+                    "server_error",
+                    "internalservererror",
+                    "internal server error",
+                    "error code: 500",
+                    "status code: 500",
+                )
+            )
             if not is_retryable or attempt >= max_retries:
                 raise
 

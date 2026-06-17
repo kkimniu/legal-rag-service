@@ -22,6 +22,19 @@ function domainLabel(domainCode?: string | null) {
   return domainOptions.find((option) => option.value === (domainCode ?? ''))?.label ?? '전체 분야';
 }
 
+function evidenceLabel(source: ChatMessage['sources'][number]) {
+  return source.metadata.evidence_type === 'precedent' ? '판례' : '법률';
+}
+
+function isPrecedentSource(source: ChatMessage['sources'][number]) {
+  return source.metadata.evidence_type === 'precedent';
+}
+
+function caseNumber(source: ChatMessage['sources'][number]) {
+  const value = source.metadata.meta_case_number ?? source.metadata.case_number;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
@@ -316,11 +329,17 @@ export function App() {
                           const sourceKey = `${item.id}-${source.id}`;
                           const isExpanded = expandedSources.has(sourceKey);
                           const isLong = source.text.length > 200;
+                          const sourceEvidenceLabel = evidenceLabel(source);
+                          const sourceCaseNumber = caseNumber(source);
+                          const sourceIsPrecedent = isPrecedentSource(source);
                           return (
                             <section className="source-item" key={sourceKey}>
                               <div className="source-meta">
-                                <span>근거 {index + 1}</span>
+                                <span className={sourceIsPrecedent ? 'precedent-badge' : 'statute-badge'}>
+                                  {sourceEvidenceLabel} 근거 {index + 1}
+                                </span>
                                 <span>{source.domain_name ?? '분야 미상'}</span>
+                                {sourceCaseNumber && <span>{sourceCaseNumber}</span>}
                                 {source.score !== null && source.score !== undefined && (
                                   <span>유사도 {(1 - source.score).toFixed(3)}</span>
                                 )}

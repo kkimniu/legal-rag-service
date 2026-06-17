@@ -46,6 +46,9 @@ data/chunks/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/chunks/.gitkeep
+!data/raw/precedents/
+data/raw/precedents/incoming/**
+!data/raw/precedents/README.md
 
 # Logs and local runtime files
 *.log
@@ -67,3 +70,4 @@ Thumbs.db
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
+.claude/

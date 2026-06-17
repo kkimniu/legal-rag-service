@@ -1,9 +1,8 @@
 # Documentation
 
-프로젝트 의사결정과 운영 문서를 보관합니다.
+프로젝트 의사결정, 데이터 처리, RAG 평가, 배포 절차를 정리하는 문서 폴더입니다.
 
-- API 명세
-- 데이터 처리 정책
-- RAG 평가 기준
-- 배포 절차
-- 보안과 개인정보 처리 메모
+- [data-source.md](data-source.md): AI Hub 법률 데이터 처리 흐름
+- [case-law-rag-extension.md](case-law-rag-extension.md): 판례 검색 확장 설계
+- [deployment.md](deployment.md): 운영 배포 준비와 체크리스트
+- [release-checklist.md](release-checklist.md): main 병합 전 릴리즈 체크리스트

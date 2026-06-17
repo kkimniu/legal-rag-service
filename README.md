@@ -48,6 +48,8 @@ chroma_db/        ChromaDB 로컬 저장소 (Git 제외)
 
 상세 설계는 [docs/case-law-rag-extension.md](docs/case-law-rag-extension.md)를 참고합니다.
 
+main 병합 전 확인 항목은 [docs/release-checklist.md](docs/release-checklist.md)를 참고합니다.
+
 ---
 
 ## 판례 데이터 전처리

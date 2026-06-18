@@ -180,6 +180,7 @@ npm.cmd run build
 - [데이터 출처와 처리 흐름](docs/data-source.md)
 - [배포 가이드](docs/deployment.md)
 - [VPS + Docker Compose 배포 가이드](docs/vps-deployment.md)
+- [Oracle Cloud Always Free 배포 가이드](docs/oracle-cloud-always-free.md)
 - [릴리즈 체크리스트](docs/release-checklist.md)
 
 ## Git에 포함하지 않는 항목

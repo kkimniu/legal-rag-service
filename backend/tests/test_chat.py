@@ -28,7 +28,7 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
     db_session.refresh(user)
 
     session = create_chat_session(db_session, user.id, domain_code="01_civil_law")
-    user_message = add_user_message(db_session, session, "계약 불이행 책임은 무엇인가요?")
+    user_message = add_user_message(db_session, session, "계약 불이행 책임은 무엇인가요?", "issue")
     assistant_message = add_assistant_message(
         db_session,
         session,
@@ -47,6 +47,7 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
                 )
             ],
         ),
+        "issue",
     )
 
     sessions = list_chat_sessions(db_session, user.id)
@@ -57,6 +58,8 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
     assert sessions[0].domain_code == "01_civil_law"
     assert sessions[0].is_pinned is False
     assert [message.id for message in messages] == [user_message.id, assistant_message.id]
+    assert messages[0].answer_mode == "issue"
+    assert messages[1].answer_mode == "issue"
     assert messages[1].sources[0]["id"] == "chunk-1"
     assert count_chat_messages(db_session, session.id) == 2
     assert get_last_chat_message(db_session, session.id).id == assistant_message.id
@@ -168,3 +171,40 @@ def test_chat_session_api_pins_owned_session(client: TestClient) -> None:
 
     assert pin_response.status_code == 200
     assert pin_response.json()["is_pinned"] is True
+
+
+def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "chat-mode-api@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "chat-mode-api@example.com", "password": "password123"},
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    create_response = client.post(
+        "/api/v1/chat/sessions",
+        json={"title": "답변 모드 테스트", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+
+    captured = {}
+
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general"):
+        captured["answer_mode"] = answer_mode
+        return RagAskResponse(answer="쟁점 정리 답변", is_ready=True, sources=[])
+
+    monkeypatch.setattr("app.api.v1.routes.chat.RagService.answer", fake_answer)
+
+    message_response = client.post(
+        f"/api/v1/chat/sessions/{create_response.json()['id']}/messages",
+        json={"content": "쟁점을 정리해줘", "answer_mode": "issue"},
+        headers=headers,
+    )
+
+    assert message_response.status_code == 200
+    assert captured["answer_mode"] == "issue"
+    assert message_response.json()["user_message"]["answer_mode"] == "issue"
+    assert message_response.json()["assistant_message"]["answer_mode"] == "issue"

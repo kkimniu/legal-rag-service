@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.rag import RagSource
@@ -14,6 +16,7 @@ class ChatMessageCreate(BaseModel):
     """User message sent to a chatbot session."""
 
     content: str = Field(..., min_length=1)
+    answer_mode: Literal["general", "brief", "detailed", "issue", "consultation"] = "general"
 
 
 class ChatMessageRead(BaseModel):
@@ -22,6 +25,7 @@ class ChatMessageRead(BaseModel):
     id: int
     role: str
     content: str
+    answer_mode: str | None = None
     sources: list[RagSource] = []
     created_at: str
 

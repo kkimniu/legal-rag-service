@@ -26,6 +26,7 @@ export type ChatMessage = {
   id: number;
   role: 'user' | 'assistant';
   content: string;
+  answer_mode?: string | null;
   sources: RagSource[];
   created_at: string;
 };
@@ -72,11 +73,11 @@ export async function fetchChatMessages(sessionId: number): Promise<ChatMessage[
   }
 }
 
-export async function sendChatMessage(sessionId: number, content: string): Promise<ChatTurn | null> {
+export async function sendChatMessage(sessionId: number, content: string, answerMode = 'general'): Promise<ChatTurn | null> {
   try {
     const response = await api.post<ChatTurn>(
       `/chat/sessions/${sessionId}/messages`,
-      { content },
+      { content, answer_mode: answerMode },
       { headers: await getAuthHeaders() },
     );
     return response.data;

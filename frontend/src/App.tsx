@@ -19,8 +19,20 @@ const domainOptions = [
   { value: '04_criminal_law', label: '형사법' },
 ];
 
+const answerModeOptions = [
+  { value: 'general', label: '기본 답변' },
+  { value: 'brief', label: '간단 답변' },
+  { value: 'detailed', label: '상세 검토' },
+  { value: 'issue', label: '쟁점 정리' },
+  { value: 'consultation', label: '상담 준비' },
+];
+
 function domainLabel(domainCode?: string | null) {
   return domainOptions.find((option) => option.value === (domainCode ?? ''))?.label ?? '전체 분야';
+}
+
+function answerModeLabel(answerMode?: string | null) {
+  return answerModeOptions.find((option) => option.value === (answerMode ?? 'general'))?.label ?? '기본 답변';
 }
 
 function evidenceLabel(source: ChatMessage['sources'][number]) {
@@ -39,6 +51,7 @@ function caseNumber(source: ChatMessage['sources'][number]) {
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
+  const [answerMode, setAnswerMode] = useState('general');
   const [isLoading, setIsLoading] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -177,7 +190,7 @@ export function App() {
 
     setIsLoading(true);
     setChatStatus('답변을 재생성하는 중입니다.');
-    const turn = await sendChatMessage(activeSession.id, lastUserMsg.content);
+    const turn = await sendChatMessage(activeSession.id, lastUserMsg.content, answerMode);
     if (!turn) {
       setChatStatus('재생성에 실패했습니다. 백엔드 서버 상태를 확인해주세요.');
       setIsLoading(false);
@@ -212,6 +225,7 @@ export function App() {
       id: -Date.now(),
       role: 'user',
       content,
+      answer_mode: answerMode,
       sources: [],
       created_at: new Date().toISOString(),
     };
@@ -220,7 +234,7 @@ export function App() {
     setIsLoading(true);
     setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
 
-    const turn = await sendChatMessage(session.id, content);
+    const turn = await sendChatMessage(session.id, content, answerMode);
     if (!turn) {
       setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
       setMessages((items) => items.filter((item) => item.id !== optimisticUserMessage.id));
@@ -338,20 +352,36 @@ export function App() {
                 {activeSession ? `${domainLabel(activeSession.domain_code)} 대화 · ${chatStatus}` : chatStatus}
               </p>
             </div>
-            <div className="domain-control">
-              <label htmlFor="domain">법 분야</label>
-              <select
-                id="domain"
-                value={activeSession?.domain_code ?? domainCode}
-                onChange={(event) => setDomainCode(event.target.value)}
-                disabled={Boolean(activeSession)}
-              >
-                {domainOptions.map((option) => (
-                  <option key={option.value || 'all'} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="chat-controls">
+              <div className="domain-control">
+                <label htmlFor="domain">법 분야</label>
+                <select
+                  id="domain"
+                  value={activeSession?.domain_code ?? domainCode}
+                  onChange={(event) => setDomainCode(event.target.value)}
+                  disabled={Boolean(activeSession)}
+                >
+                  {domainOptions.map((option) => (
+                    <option key={option.value || 'all'} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="domain-control">
+                <label htmlFor="answer-mode">답변 모드</label>
+                <select
+                  id="answer-mode"
+                  value={answerMode}
+                  onChange={(event) => setAnswerMode(event.target.value)}
+                >
+                  {answerModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </header>
 
@@ -364,6 +394,9 @@ export function App() {
                 return (
                 <article className={`message-bubble ${item.role}`} key={item.id}>
                   <span>{item.role === 'user' ? '사용자' : 'AI'}</span>
+                  {item.role === 'assistant' && item.answer_mode && (
+                    <b className="answer-mode-badge">{answerModeLabel(item.answer_mode)}</b>
+                  )}
                   <p>{item.content}</p>
                   {item.sources.length > 0 && (
                     <details>

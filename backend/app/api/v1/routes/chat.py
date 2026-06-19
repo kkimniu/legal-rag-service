@@ -52,6 +52,7 @@ def message_read(message: ChatMessage) -> ChatMessageRead:
         id=message.id,
         role=message.role,
         content=message.content,
+        answer_mode=message.answer_mode,
         sources=sources_from_raw(message.sources),
         created_at=message.created_at.isoformat(),
     )
@@ -117,13 +118,14 @@ def send_message(
 
     previous_messages = list_chat_messages(db, session.id, limit=12)
     chat_history = [(message.role, message.content) for message in previous_messages]
-    user_message = add_user_message(db, session, payload.content)
+    user_message = add_user_message(db, session, payload.content, payload.answer_mode)
     response = RagService().answer(
         payload.content,
         domain_code=session.domain_code,
         chat_history=chat_history,
+        answer_mode=payload.answer_mode,
     )
-    assistant_message = add_assistant_message(db, session, response)
+    assistant_message = add_assistant_message(db, session, response, payload.answer_mode)
 
     return ChatTurnResponse(
         session=session_read(session, db),

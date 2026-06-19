@@ -18,7 +18,11 @@ def ask_legal_question(
     current_user: User | None = Depends(get_optional_current_user),
 ) -> RagAskResponse:
     """Answer a legal question with retrieved chunks when the vector index is ready."""
-    response = RagService(top_k=payload.top_k).answer(payload.question, domain_code=payload.domain_code)
+    response = RagService(top_k=payload.top_k).answer(
+        payload.question,
+        domain_code=payload.domain_code,
+        answer_mode=payload.answer_mode,
+    )
     if current_user is not None and response.is_ready:
         db = SessionLocal()
         try:

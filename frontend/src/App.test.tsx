@@ -72,6 +72,7 @@ describe('App', () => {
         id: 10,
         role: 'user',
         content: '계약 불이행 책임은 무엇인가요?',
+        answer_mode: 'issue',
         sources: [],
         created_at: '2026-06-14T10:01:00',
       },
@@ -79,6 +80,7 @@ describe('App', () => {
         id: 11,
         role: 'assistant',
         content: '검색 근거에 기반한 답변입니다.',
+        answer_mode: 'issue',
         created_at: '2026-06-14T10:01:01',
         sources: [
           {
@@ -103,15 +105,17 @@ describe('App', () => {
     expect(await screen.findByText('user@example.com')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '새 대화' }));
     expect(mockedCreateChatSession).not.toHaveBeenCalled();
+    await userEvent.selectOptions(screen.getByLabelText('답변 모드'), 'issue');
     await userEvent.type(screen.getByLabelText('메시지'), '계약 불이행 책임은 무엇인가요?');
     await userEvent.click(screen.getByRole('button', { name: '보내기' }));
 
     expect(screen.getByText('계약 불이행 책임은 무엇인가요?')).toBeInTheDocument();
     await waitFor(() => {
       expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?', '01_civil_law');
-      expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?');
+      expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?', 'issue');
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
+    expect(screen.getAllByText('쟁점 정리').length).toBeGreaterThan(1);
     expect(screen.getByText('검색 근거 1개')).toBeInTheDocument();
     expect(screen.getByText('판례 근거 1')).toBeInTheDocument();
     expect(screen.getByText('2024다12345')).toBeInTheDocument();

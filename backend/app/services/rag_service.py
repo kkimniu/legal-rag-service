@@ -21,6 +21,7 @@ class RagService:
         question: str,
         domain_code: str | None = None,
         chat_history: list[tuple[str, str]] | None = None,
+        answer_mode: str = "general",
     ) -> RagAskResponse:
         """Retrieve legal/statute chunks and precedent chunks, then generate a grounded answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
@@ -56,7 +57,12 @@ class RagService:
             )
 
         try:
-            answer = self._generate_answer(question, sources, chat_history=chat_history)
+            answer = self._generate_answer(
+                question,
+                sources,
+                chat_history=chat_history,
+                answer_mode=answer_mode,
+            )
         except Exception as exc:
             return RagAskResponse(
                 answer=f"근거는 찾았지만 답변 생성 중 오류가 발생했습니다: {exc}",
@@ -269,6 +275,7 @@ class RagService:
         question: str,
         sources: list[RagSource],
         chat_history: list[tuple[str, str]] | None = None,
+        answer_mode: str = "general",
     ) -> str:
         model = ChatOpenAI(
             model=settings.openai_model,
@@ -277,6 +284,7 @@ class RagService:
         )
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])
+        mode_instruction = self._answer_mode_instruction(answer_mode)
         response = model.invoke(
             [
                 SystemMessage(
@@ -299,6 +307,7 @@ class RagService:
                 HumanMessage(
                     content=(
                         f"최근 대화\n{conversation_context}\n\n"
+                        f"답변 모드\n{mode_instruction}\n\n"
                         f"질문:\n{question}\n\n"
                         f"검색된 근거:\n{context}\n\n"
                         "검색된 근거만 사용해서 한국어로 답변하세요. "
@@ -318,6 +327,28 @@ class RagService:
         if not has_notice:
             answer = f"{answer}\n\n{disclaimer}"
         return answer
+
+    def _answer_mode_instruction(self, answer_mode: str) -> str:
+        instructions = {
+            "brief": (
+                "간단 답변 모드입니다. 핵심 결론을 먼저 말하고 관련 법령과 판례는 가장 중요한 근거만 짧게 정리하세요. "
+                "불필요한 배경 설명은 줄이세요."
+            ),
+            "detailed": (
+                "상세 검토 모드입니다. 사실관계, 법령, 판례, 적용 가능성, 한계를 차례대로 설명하세요. "
+                "근거가 부족한 부분은 명확히 구분하세요."
+            ),
+            "issue": (
+                "쟁점 정리 모드입니다. 질문에서 문제되는 법적 쟁점을 항목별로 나누고, 각 쟁점마다 관련 법령과 판례를 연결하세요. "
+                "마지막에 추가로 확인할 사실을 제안하세요."
+            ),
+            "consultation": (
+                "상담 준비 모드입니다. 전문가 상담 전에 준비해야 할 자료, 확인 질문, 위험 요소를 중심으로 정리하세요. "
+                "답변은 법률 자문이 아니라 상담 준비용 참고 정보임을 분명히 하세요."
+            ),
+            "general": "기본 답변 모드입니다. 질문에 직접 답하고 관련 법령과 판례를 균형 있게 정리하세요.",
+        }
+        return instructions.get(answer_mode, instructions["general"])
 
     def _format_chat_history(self, chat_history: list[tuple[str, str]]) -> str:
         if not chat_history:

@@ -73,9 +73,20 @@ def get_last_chat_message(db: Session, session_id: int) -> ChatMessage | None:
     return db.scalar(statement)
 
 
-def add_user_message(db: Session, session: ChatSession, content: str) -> ChatMessage:
+def add_user_message(
+    db: Session,
+    session: ChatSession,
+    content: str,
+    answer_mode: str = "general",
+) -> ChatMessage:
     """Persist a user message and use it to name a new conversation."""
-    message = ChatMessage(session_id=session.id, role="user", content=content.strip(), sources=[])
+    message = ChatMessage(
+        session_id=session.id,
+        role="user",
+        content=content.strip(),
+        answer_mode=answer_mode,
+        sources=[],
+    )
     if session.title == "새 대화":
         session.title = content.strip()[:40] or "새 대화"
     session.updated_at = datetime.now(UTC)
@@ -87,12 +98,18 @@ def add_user_message(db: Session, session: ChatSession, content: str) -> ChatMes
     return message
 
 
-def add_assistant_message(db: Session, session: ChatSession, response: RagAskResponse) -> ChatMessage:
+def add_assistant_message(
+    db: Session,
+    session: ChatSession,
+    response: RagAskResponse,
+    answer_mode: str = "general",
+) -> ChatMessage:
     """Persist the assistant answer and its retrieved sources."""
     message = ChatMessage(
         session_id=session.id,
         role="assistant",
         content=response.answer,
+        answer_mode=answer_mode,
         sources=[source.model_dump() for source in response.sources],
     )
     session.updated_at = datetime.now(UTC)

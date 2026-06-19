@@ -295,9 +295,14 @@ button:disabled {
   border-bottom: 1px solid #d8dee8;
 }
 
+.chat-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 220px));
+  gap: 10px;
+}
+
 .domain-control {
   display: grid;
-  width: 220px;
   gap: 6px;
 }
 
@@ -333,6 +338,16 @@ button:disabled {
   color: #536174;
   font-size: 12px;
   font-weight: 800;
+}
+
+.answer-mode-badge {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 999px;
+  background: #e8f0f8;
+  color: #244c73;
+  font-size: 12px;
+  padding: 3px 8px;
 }
 
 .message-bubble p {
@@ -484,6 +499,11 @@ summary {
   .chat-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .chat-controls {
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .domain-control {

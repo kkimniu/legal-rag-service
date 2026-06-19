@@ -6,6 +6,7 @@ import {
   fetchChatMessages,
   fetchChatSessions,
   sendChatMessage,
+  updateChatSessionPin,
   type ChatMessage,
   type ChatSession,
 } from './api/chat';
@@ -47,9 +48,18 @@ export function App() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessionSearch, setSessionSearch] = useState('');
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
+  const filteredSessions = sessions.filter((session) => {
+    const query = sessionSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [session.title, domainLabel(session.domain_code), session.last_message_preview ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(query);
+  });
 
   function toggleSource(key: string) {
     setExpandedSources((prev) => {
@@ -140,6 +150,24 @@ export function App() {
       setMessages(nextSessions[0] ? await fetchChatMessages(nextSessions[0].id) : []);
     }
     setChatStatus('대화방을 삭제했습니다.');
+  }
+
+  async function handleTogglePin(session: ChatSession) {
+    const updatedSession = await updateChatSessionPin(session.id, !session.is_pinned);
+    if (!updatedSession) {
+      setChatStatus('대화방 고정 상태를 바꾸지 못했습니다.');
+      return;
+    }
+    setSessions((items) =>
+      [updatedSession, ...items.filter((item) => item.id !== updatedSession.id)].sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      }),
+    );
+    if (activeSession?.id === updatedSession.id) {
+      setActiveSession(updatedSession);
+    }
+    setChatStatus(updatedSession.is_pinned ? '대화방을 상단에 고정했습니다.' : '대화방 고정을 해제했습니다.');
   }
 
   async function handleRegenerate() {
@@ -256,16 +284,26 @@ export function App() {
                   새 대화
                 </button>
               </div>
+              <label className="session-search" htmlFor="session-search">
+                <span>대화 검색</span>
+                <input
+                  id="session-search"
+                  type="search"
+                  value={sessionSearch}
+                  onChange={(event) => setSessionSearch(event.target.value)}
+                  placeholder="제목, 분야, 최근 메시지"
+                />
+              </label>
               {sessions.length > 0 ? (
                 <div className="session-list">
-                  {sessions.map((session) => (
+                  {filteredSessions.map((session) => (
                     <article className="session-item" key={session.id}>
                       <button
                         type="button"
                         className={activeSession?.id === session.id ? 'session-open-button active-session' : 'session-open-button'}
                         onClick={() => handleSelectSession(session)}
                       >
-                        <span>{session.title}</span>
+                        <span>{session.is_pinned ? `고정 · ${session.title}` : session.title}</span>
                         <b>{domainLabel(session.domain_code)}</b>
                         <small>
                           메시지 {session.message_count}개
@@ -273,11 +311,17 @@ export function App() {
                         </small>
                         <time>{new Date(session.updated_at).toLocaleString('ko-KR')}</time>
                       </button>
+                      <button type="button" className="session-pin-button" onClick={() => handleTogglePin(session)}>
+                        {session.is_pinned ? '고정 해제' : '고정'}
+                      </button>
                       <button type="button" className="session-delete-button" onClick={() => handleDeleteSession(session)}>
                         삭제
                       </button>
                     </article>
                   ))}
+                  {filteredSessions.length === 0 && (
+                    <p className="empty-state">검색 조건에 맞는 대화가 없습니다.</p>
+                  )}
                 </div>
               ) : (
                 <p className="empty-state">아직 저장된 대화가 없습니다.</p>

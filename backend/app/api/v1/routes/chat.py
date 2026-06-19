@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.chat import (
     ChatMessageCreate,
     ChatMessageRead,
+    ChatSessionPinUpdate,
     ChatSessionCreate,
     ChatSessionRead,
     ChatTurnResponse,
@@ -23,6 +24,7 @@ from app.services.chat_service import (
     list_chat_messages,
     list_chat_sessions,
     sources_from_raw,
+    update_chat_session_pin,
 )
 from app.services.rag_service import RagService
 
@@ -37,6 +39,7 @@ def session_read(session: ChatSession, db: Session | None = None) -> ChatSession
         id=session.id,
         title=session.title,
         domain_code=session.domain_code,
+        is_pinned=session.is_pinned,
         created_at=session.created_at.isoformat(),
         updated_at=session.updated_at.isoformat(),
         message_count=message_count,
@@ -84,6 +87,20 @@ def read_messages(
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session was not found.")
     return [message_read(message) for message in list_chat_messages(db, session.id)]
+
+
+@router.patch("/sessions/{session_id}/pin", response_model=ChatSessionRead)
+def update_session_pin(
+    session_id: int,
+    payload: ChatSessionPinUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatSessionRead:
+    """Pin or unpin one owned chatbot conversation."""
+    session = update_chat_session_pin(db, current_user.id, session_id, payload.is_pinned)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session was not found.")
+    return session_read(session, db)
 
 
 @router.post("/sessions/{session_id}/messages", response_model=ChatTurnResponse)

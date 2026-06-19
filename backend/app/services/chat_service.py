@@ -30,7 +30,7 @@ def list_chat_sessions(db: Session, user_id: int, limit: int = 30) -> list[ChatS
     statement = (
         select(ChatSession)
         .where(ChatSession.user_id == user_id)
-        .order_by(desc(ChatSession.updated_at), desc(ChatSession.created_at))
+        .order_by(desc(ChatSession.is_pinned), desc(ChatSession.updated_at), desc(ChatSession.created_at))
         .limit(limit)
     )
     return list(db.scalars(statement))
@@ -112,6 +112,24 @@ def delete_chat_session(db: Session, user_id: int, session_id: int) -> bool:
     db.delete(session)
     db.commit()
     return True
+
+
+def update_chat_session_pin(
+    db: Session,
+    user_id: int,
+    session_id: int,
+    is_pinned: bool,
+) -> ChatSession | None:
+    """Update pinned state for one owned conversation."""
+    session = get_chat_session(db, user_id, session_id)
+    if session is None:
+        return None
+    session.is_pinned = is_pinned
+    session.updated_at = datetime.now(UTC)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
 
 
 def sources_from_raw(raw_sources: list[dict]) -> list[RagSource]:

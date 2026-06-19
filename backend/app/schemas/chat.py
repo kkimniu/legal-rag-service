@@ -32,10 +32,17 @@ class ChatSessionRead(BaseModel):
     id: int
     title: str
     domain_code: str | None = None
+    is_pinned: bool = False
     created_at: str
     updated_at: str
     message_count: int = 0
     last_message_preview: str | None = None
+
+
+class ChatSessionPinUpdate(BaseModel):
+    """Pinned state update for a chatbot conversation."""
+
+    is_pinned: bool
 
 
 class ChatTurnResponse(BaseModel):

@@ -15,6 +15,7 @@ export type ChatSession = {
   id: number;
   title: string;
   domain_code?: string | null;
+  is_pinned: boolean;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -90,5 +91,18 @@ export async function deleteChatSession(sessionId: number): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function updateChatSessionPin(sessionId: number, isPinned: boolean): Promise<ChatSession | null> {
+  try {
+    const response = await api.patch<ChatSession>(
+      `/chat/sessions/${sessionId}/pin`,
+      { is_pinned: isPinned },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
   }
 }

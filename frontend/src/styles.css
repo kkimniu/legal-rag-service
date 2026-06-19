@@ -183,6 +183,19 @@ button:disabled {
   margin-bottom: 4px;
 }
 
+.session-search {
+  display: grid;
+  gap: 6px;
+}
+
+.session-search span {
+  font-size: 13px;
+}
+
+.session-search input {
+  min-height: 42px;
+}
+
 .session-list {
   display: grid;
   gap: 10px;
@@ -190,11 +203,12 @@ button:disabled {
 
 .session-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 76px;
   gap: 8px;
 }
 
 .session-open-button {
+  grid-row: span 2;
   display: grid;
   width: 100%;
   justify-items: start;
@@ -243,8 +257,24 @@ button:disabled {
   -webkit-line-clamp: 2;
 }
 
+.session-pin-button,
 .session-delete-button {
   align-self: stretch;
+  justify-self: stretch;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.session-pin-button {
+  background: #e8f0f8;
+  color: #244c73;
+}
+
+.session-pin-button:hover {
+  background: #d5e4f2;
+}
+
+.session-delete-button {
   background: #f8e8e8;
   color: #8a2f2f;
 }

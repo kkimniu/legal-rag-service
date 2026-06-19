@@ -13,6 +13,7 @@ from app.services.chat_service import (
     get_last_chat_message,
     list_chat_messages,
     list_chat_sessions,
+    update_chat_session_pin,
 )
 
 
@@ -54,10 +55,32 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
     assert sessions[0].id == session.id
     assert sessions[0].title == "계약 불이행 책임은 무엇인가요?"
     assert sessions[0].domain_code == "01_civil_law"
+    assert sessions[0].is_pinned is False
     assert [message.id for message in messages] == [user_message.id, assistant_message.id]
     assert messages[1].sources[0]["id"] == "chunk-1"
     assert count_chat_messages(db_session, session.id) == 2
     assert get_last_chat_message(db_session, session.id).id == assistant_message.id
+
+
+def test_pinned_chat_sessions_are_listed_first(db_session: Session) -> None:
+    user = User(
+        email="chat-pin@example.com",
+        hashed_password=hash_password("password123"),
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    first = create_chat_session(db_session, user.id, "일반 대화")
+    second = create_chat_session(db_session, user.id, "고정 대화")
+
+    updated = update_chat_session_pin(db_session, user.id, second.id, True)
+    sessions = list_chat_sessions(db_session, user.id)
+
+    assert updated is not None
+    assert updated.is_pinned is True
+    assert [session.id for session in sessions] == [second.id, first.id]
 
 
 def test_delete_chat_session_only_deletes_owner_session(db_session: Session) -> None:
@@ -109,10 +132,39 @@ def test_chat_session_api_creates_and_reads_owned_session(client: TestClient) ->
     assert create_response.status_code == 200
     assert create_response.json()["title"] == "민사법 상담"
     assert create_response.json()["domain_code"] == "01_civil_law"
+    assert create_response.json()["is_pinned"] is False
     assert sessions_response.status_code == 200
     assert sessions_response.json()[0]["title"] == "민사법 상담"
     assert sessions_response.json()[0]["domain_code"] == "01_civil_law"
+    assert sessions_response.json()[0]["is_pinned"] is False
     assert sessions_response.json()[0]["message_count"] == 0
     assert sessions_response.json()[0]["last_message_preview"] is None
     assert messages_response.status_code == 200
     assert messages_response.json() == []
+
+
+def test_chat_session_api_pins_owned_session(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "chat-pin-api@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "chat-pin-api@example.com", "password": "password123"},
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/api/v1/chat/sessions",
+        json={"title": "중요 상담", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    pin_response = client.patch(
+        f"/api/v1/chat/sessions/{create_response.json()['id']}/pin",
+        json={"is_pinned": True},
+        headers=headers,
+    )
+
+    assert pin_response.status_code == 200
+    assert pin_response.json()["is_pinned"] is True

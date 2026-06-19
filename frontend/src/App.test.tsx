@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
-import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage } from './api/chat';
+import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
   clearStoredToken: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock('./api/chat', () => ({
   fetchChatMessages: vi.fn(),
   fetchChatSessions: vi.fn(),
   sendChatMessage: vi.fn(),
+  updateChatSessionPin: vi.fn(),
 }));
 
 const mockedFetchCurrentUser = vi.mocked(fetchCurrentUser);
@@ -27,6 +28,7 @@ const mockedCreateChatSession = vi.mocked(createChatSession);
 const mockedFetchChatSessions = vi.mocked(fetchChatSessions);
 const mockedFetchChatMessages = vi.mocked(fetchChatMessages);
 const mockedSendChatMessage = vi.mocked(sendChatMessage);
+const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 
 describe('App', () => {
   beforeEach(() => {
@@ -50,6 +52,7 @@ describe('App', () => {
       id: 1,
       title: '계약 불이행 책임',
       domain_code: '01_civil_law',
+      is_pinned: false,
       created_at: '2026-06-14T10:00:00',
       updated_at: '2026-06-14T10:00:00',
       message_count: 2,
@@ -132,5 +135,48 @@ describe('App', () => {
     expect(await screen.findByText('new@example.com')).toBeInTheDocument();
     expect(screen.getByLabelText('메시지')).toBeEnabled();
     expect(mockedFetchChatSessions).toHaveBeenCalled();
+  });
+
+  it('filters and pins chat sessions', async () => {
+    const sessions = [
+      {
+        id: 1,
+        title: '임대차 보증금 상담',
+        domain_code: '01_civil_law',
+        is_pinned: false,
+        created_at: '2026-06-14T10:00:00',
+        updated_at: '2026-06-14T10:00:00',
+        message_count: 2,
+        last_message_preview: '보증금 반환 관련 답변',
+      },
+      {
+        id: 2,
+        title: '상표권 침해 검토',
+        domain_code: '02_intellectual_property_law',
+        is_pinned: false,
+        created_at: '2026-06-14T11:00:00',
+        updated_at: '2026-06-14T11:00:00',
+        message_count: 1,
+        last_message_preview: '상표권 침해 판단',
+      },
+    ];
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'user@example.com', is_active: true });
+    mockedFetchChatSessions.mockResolvedValue(sessions);
+    mockedUpdateChatSessionPin.mockResolvedValue({ ...sessions[0], is_pinned: true });
+
+    render(<App />);
+
+    expect((await screen.findAllByText('임대차 보증금 상담')).length).toBeGreaterThan(0);
+    expect(screen.getByText('상표권 침해 검토')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('대화 검색'), '보증금');
+
+    expect(screen.getAllByText('임대차 보증금 상담').length).toBeGreaterThan(0);
+    expect(screen.queryByText('상표권 침해 검토')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '고정' }));
+
+    expect(mockedUpdateChatSessionPin).toHaveBeenCalledWith(1, true);
+    expect(await screen.findByText('고정 · 임대차 보증금 상담')).toBeInTheDocument();
   });
 });

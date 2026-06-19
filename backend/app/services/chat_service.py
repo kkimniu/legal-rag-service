@@ -12,10 +12,12 @@ def create_chat_session(
     user_id: int,
     title: str | None = None,
     domain_code: str | None = None,
+    case_id: int | None = None,
 ) -> ChatSession:
     """Create a new chatbot conversation."""
     session = ChatSession(
         user_id=user_id,
+        case_id=case_id,
         title=(title or "새 대화").strip() or "새 대화",
         domain_code=domain_code,
     )

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
+import { createCase, fetchCases, type LegalCase } from './api/cases';
 import {
   createChatSession,
   deleteChatSession,
@@ -68,6 +69,9 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [cases, setCases] = useState<LegalCase[]>([]);
+  const [activeCase, setActiveCase] = useState<LegalCase | null>(null);
+  const [caseTitle, setCaseTitle] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
@@ -96,6 +100,7 @@ export function App() {
       if (user) {
         setCurrentUser(user);
         setAuthMessage('저장된 토큰으로 로그인 상태를 복원했습니다.');
+        await refreshCases();
         await refreshSessions();
       }
     });
@@ -116,13 +121,24 @@ export function App() {
     }
   }
 
+  async function refreshCases() {
+    const nextCases = await fetchCases();
+    setCases(nextCases);
+    if (nextCases.length > 0 && !activeCase) {
+      setActiveCase(nextCases[0]);
+    }
+  }
+
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const authResult = authMode === 'login' ? await login(email, password) : await register(email, password);
     setAuthMessage(authResult.message);
     if (authResult.user) {
       setCurrentUser(authResult.user);
+      const nextCases = await fetchCases();
       const nextSessions = await fetchChatSessions();
+      setCases(nextCases);
+      setActiveCase(nextCases[0] ?? null);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
@@ -139,6 +155,8 @@ export function App() {
     clearStoredToken();
     setCurrentUser(null);
     setSessions([]);
+    setCases([]);
+    setActiveCase(null);
     setActiveSession(null);
     setMessages([]);
     setAuthMessage('로그아웃되었습니다.');
@@ -191,6 +209,20 @@ export function App() {
     setChatStatus(updatedSession.is_pinned ? '대화방을 상단에 고정했습니다.' : '대화방 고정을 해제했습니다.');
   }
 
+  async function handleCreateCase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!caseTitle.trim()) return;
+    const legalCase = await createCase(caseTitle.trim(), domainCode);
+    if (!legalCase) {
+      setChatStatus('사건 노트를 만들지 못했습니다.');
+      return;
+    }
+    setCases((items) => [legalCase, ...items]);
+    setActiveCase(legalCase);
+    setCaseTitle('');
+    setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
+  }
+
   async function handleRegenerate() {
     if (!activeSession || isLoading) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
@@ -219,7 +251,7 @@ export function App() {
 
     let session = activeSession;
     if (!session) {
-      session = await createChatSession(message.trim().slice(0, 40), domainCode);
+      session = await createChatSession(message.trim().slice(0, 40), domainCode, activeCase?.id);
       if (!session) {
         setChatStatus('대화방을 만들 수 없습니다. 로그인 또는 DB 상태를 확인해주세요.');
         return;
@@ -301,6 +333,45 @@ export function App() {
           </section>
 
           {currentUser && (
+            <>
+            <section className="case-panel">
+              <div className="section-heading">
+                <h2>사건 노트</h2>
+                <button type="button" className="secondary-button" onClick={() => setActiveCase(null)}>
+                  선택 해제
+                </button>
+              </div>
+              <form className="case-form" onSubmit={handleCreateCase}>
+                <label htmlFor="case-title">새 사건</label>
+                <input
+                  id="case-title"
+                  value={caseTitle}
+                  onChange={(event) => setCaseTitle(event.target.value)}
+                  placeholder="예: 임대차 보증금 반환"
+                />
+                <button type="submit">사건 만들기</button>
+              </form>
+              {cases.length > 0 ? (
+                <div className="case-list">
+                  {cases.map((legalCase) => (
+                    <button
+                      type="button"
+                      className={activeCase?.id === legalCase.id ? 'case-item active-case' : 'case-item'}
+                      key={legalCase.id}
+                      onClick={() => setActiveCase(legalCase)}
+                    >
+                      <span>{legalCase.title}</span>
+                      <small>
+                        {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-state">아직 사건 노트가 없습니다.</p>
+              )}
+            </section>
+
             <section className="session-panel">
               <div className="section-heading">
                 <h2>대화 목록</h2>
@@ -351,6 +422,7 @@ export function App() {
                 <p className="empty-state">아직 저장된 대화가 없습니다.</p>
               )}
             </section>
+            </>
           )}
         </aside>
 
@@ -359,7 +431,9 @@ export function App() {
             <div>
               <h2>{activeSession?.title ?? '새 채팅'}</h2>
               <p>
-                {activeSession ? `${domainLabel(activeSession.domain_code)} 대화 · ${chatStatus}` : chatStatus}
+                {activeSession
+                  ? `${domainLabel(activeSession.domain_code)} 대화 · ${chatStatus}`
+                  : `${activeCase ? `${activeCase.title} 사건에 연결 · ` : ''}${chatStatus}`}
               </p>
             </div>
             <div className="chat-controls">

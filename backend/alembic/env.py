@@ -7,6 +7,8 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.session import Base
+from app.models import chat  # noqa: F401 - imported so Alembic sees the model metadata
+from app.models import legal_case  # noqa: F401 - imported so Alembic sees the model metadata
 from app.models import rag_query  # noqa: F401 - imported so Alembic sees the model metadata
 from app.models import user  # noqa: F401 - imported so Alembic sees the model metadata
 

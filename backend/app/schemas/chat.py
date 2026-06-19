@@ -10,6 +10,7 @@ class ChatSessionCreate(BaseModel):
 
     title: str | None = Field(default=None, max_length=255)
     domain_code: str | None = Field(default=None, pattern=r"^0[1-4]_[a-z_]+$")
+    case_id: int | None = Field(default=None, ge=1)
 
 
 class ChatMessageCreate(BaseModel):
@@ -37,6 +38,7 @@ class ChatSessionRead(BaseModel):
 
     id: int
     title: str
+    case_id: int | None = None
     domain_code: str | None = None
     is_pinned: bool = False
     created_at: str

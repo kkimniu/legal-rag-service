@@ -14,6 +14,7 @@ export type RagSource = {
 export type ChatSession = {
   id: number;
   title: string;
+  case_id?: number | null;
   domain_code?: string | null;
   is_pinned: boolean;
   created_at: string;
@@ -44,11 +45,11 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
 
-export async function createChatSession(title?: string, domainCode?: string): Promise<ChatSession | null> {
+export async function createChatSession(title?: string, domainCode?: string, caseId?: number | null): Promise<ChatSession | null> {
   try {
     const response = await api.post<ChatSession>(
       '/chat/sessions',
-      { title: title || null, domain_code: domainCode || null },
+      { title: title || null, domain_code: domainCode || null, case_id: caseId || null },
       { headers: await getAuthHeaders() },
     );
     return response.data;

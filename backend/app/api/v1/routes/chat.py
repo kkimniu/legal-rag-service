@@ -26,6 +26,7 @@ from app.services.chat_service import (
     sources_from_raw,
     update_chat_session_pin,
 )
+from app.services.legal_case_service import get_legal_case
 from app.services.rag_service import RagService
 
 router = APIRouter()
@@ -38,6 +39,7 @@ def session_read(session: ChatSession, db: Session | None = None) -> ChatSession
     return ChatSessionRead(
         id=session.id,
         title=session.title,
+        case_id=session.case_id,
         domain_code=session.domain_code,
         is_pinned=session.is_pinned,
         created_at=session.created_at.isoformat(),
@@ -67,7 +69,12 @@ def create_session(
     db: Session = Depends(get_db),
 ) -> ChatSessionRead:
     """Create a new chatbot conversation for the current user."""
-    return session_read(create_chat_session(db, current_user.id, payload.title, payload.domain_code), db)
+    if payload.case_id is not None and get_legal_case(db, current_user.id, payload.case_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return session_read(
+        create_chat_session(db, current_user.id, payload.title, payload.domain_code, payload.case_id),
+        db,
+    )
 
 
 @router.get("/sessions", response_model=list[ChatSessionRead])

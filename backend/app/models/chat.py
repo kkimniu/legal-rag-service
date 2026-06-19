@@ -14,6 +14,7 @@ class ChatSession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    case_id: Mapped[int | None] = mapped_column(ForeignKey("legal_cases.id", ondelete="SET NULL"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), default="새 대화")
     domain_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
+import { createCase, fetchCases } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -21,6 +22,11 @@ vi.mock('./api/chat', () => ({
   updateChatSessionPin: vi.fn(),
 }));
 
+vi.mock('./api/cases', () => ({
+  createCase: vi.fn(),
+  fetchCases: vi.fn(),
+}));
+
 const mockedFetchCurrentUser = vi.mocked(fetchCurrentUser);
 const mockedLogin = vi.mocked(login);
 const mockedRegister = vi.mocked(register);
@@ -29,6 +35,8 @@ const mockedFetchChatSessions = vi.mocked(fetchChatSessions);
 const mockedFetchChatMessages = vi.mocked(fetchChatMessages);
 const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
+const mockedCreateCase = vi.mocked(createCase);
+const mockedFetchCases = vi.mocked(fetchCases);
 
 describe('App', () => {
   beforeEach(() => {
@@ -36,6 +44,7 @@ describe('App', () => {
     mockedFetchCurrentUser.mockResolvedValue(null);
     mockedFetchChatSessions.mockResolvedValue([]);
     mockedFetchChatMessages.mockResolvedValue([]);
+    mockedFetchCases.mockResolvedValue([]);
   });
 
   it('renders chatbot shell and disabled message box before login', async () => {
@@ -51,6 +60,7 @@ describe('App', () => {
     const session = {
       id: 1,
       title: '계약 불이행 책임',
+      case_id: 1,
       domain_code: '01_civil_law',
       is_pinned: false,
       created_at: '2026-06-14T10:00:00',
@@ -64,6 +74,19 @@ describe('App', () => {
       refreshToken: 'refresh-token',
       message: '로그인되었습니다.',
     });
+    mockedFetchCases.mockResolvedValue([
+      {
+        id: 1,
+        title: '계약 분쟁',
+        summary: '',
+        status: 'active',
+        domain_code: '01_civil_law',
+        created_at: '2026-06-14T09:00:00',
+        updated_at: '2026-06-14T09:00:00',
+        note_count: 0,
+        chat_count: 0,
+      },
+    ]);
     mockedCreateChatSession.mockResolvedValue(session);
     mockedSendChatMessage.mockResolvedValue({
       session,
@@ -115,7 +138,7 @@ describe('App', () => {
 
     expect(screen.getByText('계약 불이행 책임은 무엇인가요?')).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?', '01_civil_law');
+      expect(mockedCreateChatSession).toHaveBeenCalledWith('계약 불이행 책임은 무엇인가요?', '01_civil_law', 1);
       expect(mockedSendChatMessage).toHaveBeenCalledWith(1, '계약 불이행 책임은 무엇인가요?', 'issue');
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
@@ -147,11 +170,36 @@ describe('App', () => {
     expect(mockedFetchChatSessions).toHaveBeenCalled();
   });
 
+  it('creates a legal case note from the sidebar', async () => {
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'user@example.com', is_active: true });
+    mockedCreateCase.mockResolvedValue({
+      id: 3,
+      title: '임대차 보증금 반환',
+      summary: '',
+      status: 'active',
+      domain_code: '01_civil_law',
+      created_at: '2026-06-14T12:00:00',
+      updated_at: '2026-06-14T12:00:00',
+      note_count: 0,
+      chat_count: 0,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('user@example.com')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('새 사건'), '임대차 보증금 반환');
+    await userEvent.click(screen.getByRole('button', { name: '사건 만들기' }));
+
+    expect(mockedCreateCase).toHaveBeenCalledWith('임대차 보증금 반환', '01_civil_law');
+    expect(await screen.findByText('임대차 보증금 반환')).toBeInTheDocument();
+  });
+
   it('filters and pins chat sessions', async () => {
     const sessions = [
       {
         id: 1,
         title: '임대차 보증금 상담',
+        case_id: null,
         domain_code: '01_civil_law',
         is_pinned: false,
         created_at: '2026-06-14T10:00:00',
@@ -162,6 +210,7 @@ describe('App', () => {
       {
         id: 2,
         title: '상표권 침해 검토',
+        case_id: null,
         domain_code: '02_intellectual_property_law',
         is_pinned: false,
         created_at: '2026-06-14T11:00:00',

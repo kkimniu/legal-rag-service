@@ -75,6 +75,13 @@ p {
   gap: 12px;
 }
 
+.case-panel {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #d8dee8;
+  padding-top: 16px;
+}
+
 .auth-panel {
   padding: 16px;
 }
@@ -194,6 +201,44 @@ button:disabled {
 
 .session-search input {
   min-height: 42px;
+}
+
+.case-form {
+  display: grid;
+  gap: 8px;
+}
+
+.case-list {
+  display: grid;
+  gap: 8px;
+}
+
+.case-item {
+  display: grid;
+  width: 100%;
+  justify-items: start;
+  gap: 5px;
+  border: 1px solid #d8dee8;
+  background: #ffffff;
+  color: #172033;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.case-item:hover,
+.case-item.active-case {
+  border-color: #8aa1b8;
+  background: #f7fafc;
+}
+
+.case-item span {
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.case-item small {
+  color: #536174;
+  font-size: 12px;
 }
 
 .session-list {

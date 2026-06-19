@@ -350,6 +350,40 @@ button:disabled {
   padding: 3px 8px;
 }
 
+.evidence-status-badge {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #364456;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.evidence-status-badge.sufficient {
+  background: #dff3e8;
+  color: #1f6b4d;
+}
+
+.evidence-status-badge.partial {
+  background: #fff2cc;
+  color: #745900;
+}
+
+.evidence-status-badge.insufficient,
+.evidence-status-badge.none {
+  background: #f8e8e8;
+  color: #8a2f2f;
+}
+
+.evidence-warning-details ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #536174;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .message-bubble p {
   margin-bottom: 0;
   color: #2d3848;

@@ -28,6 +28,8 @@ export type ChatMessage = {
   content: string;
   answer_mode?: string | null;
   sources: RagSource[];
+  evidence_status?: string | null;
+  evidence_warnings?: string[];
   created_at: string;
 };
 

@@ -35,6 +35,14 @@ function answerModeLabel(answerMode?: string | null) {
   return answerModeOptions.find((option) => option.value === (answerMode ?? 'general'))?.label ?? '기본 답변';
 }
 
+function evidenceStatusLabel(status?: string | null) {
+  if (status === 'sufficient') return '근거 충분';
+  if (status === 'partial') return '근거 일부 부족';
+  if (status === 'insufficient') return '근거 부족';
+  if (status === 'none') return '근거 없음';
+  return null;
+}
+
 function evidenceLabel(source: ChatMessage['sources'][number]) {
   return source.metadata.evidence_type === 'precedent' ? '판례' : '법률';
 }
@@ -226,6 +234,8 @@ export function App() {
       role: 'user',
       content,
       answer_mode: answerMode,
+      evidence_status: null,
+      evidence_warnings: [],
       sources: [],
       created_at: new Date().toISOString(),
     };
@@ -397,7 +407,22 @@ export function App() {
                   {item.role === 'assistant' && item.answer_mode && (
                     <b className="answer-mode-badge">{answerModeLabel(item.answer_mode)}</b>
                   )}
+                  {item.role === 'assistant' && evidenceStatusLabel(item.evidence_status) && (
+                    <b className={`evidence-status-badge ${item.evidence_status}`}>
+                      {evidenceStatusLabel(item.evidence_status)}
+                    </b>
+                  )}
                   <p>{item.content}</p>
+                  {item.evidence_warnings && item.evidence_warnings.length > 0 && (
+                    <details className="evidence-warning-details">
+                      <summary>근거 품질 경고 {item.evidence_warnings.length}개</summary>
+                      <ul>
+                        {item.evidence_warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                   {item.sources.length > 0 && (
                     <details>
                       <summary>검색 근거 {item.sources.length}개</summary>

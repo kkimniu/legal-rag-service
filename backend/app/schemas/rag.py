@@ -30,6 +30,8 @@ class RagAskResponse(BaseModel):
     answer: str
     sources: list[RagSource] = []
     is_ready: bool = False
+    evidence_status: str = "unknown"
+    evidence_warnings: list[str] = []
 
 
 class RagQueryRead(BaseModel):

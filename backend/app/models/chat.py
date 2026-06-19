@@ -37,6 +37,8 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(20), index=True)
     content: Mapped[str] = mapped_column(Text)
     answer_mode: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    evidence_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    evidence_warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 

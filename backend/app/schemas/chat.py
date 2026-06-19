@@ -26,6 +26,8 @@ class ChatMessageRead(BaseModel):
     role: str
     content: str
     answer_mode: str | None = None
+    evidence_status: str | None = None
+    evidence_warnings: list[str] = []
     sources: list[RagSource] = []
     created_at: str
 

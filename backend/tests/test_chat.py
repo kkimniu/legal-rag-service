@@ -35,6 +35,8 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
         RagAskResponse(
             answer="근거 기반 답변입니다.",
             is_ready=True,
+            evidence_status="partial",
+            evidence_warnings=["신뢰 가능한 판례 근거가 부족합니다."],
             sources=[
                 RagSource(
                     id="chunk-1",
@@ -60,6 +62,8 @@ def test_chat_service_stores_sessions_and_messages(db_session: Session) -> None:
     assert [message.id for message in messages] == [user_message.id, assistant_message.id]
     assert messages[0].answer_mode == "issue"
     assert messages[1].answer_mode == "issue"
+    assert messages[1].evidence_status == "partial"
+    assert messages[1].evidence_warnings == ["신뢰 가능한 판례 근거가 부족합니다."]
     assert messages[1].sources[0]["id"] == "chunk-1"
     assert count_chat_messages(db_session, session.id) == 2
     assert get_last_chat_message(db_session, session.id).id == assistant_message.id
@@ -194,7 +198,13 @@ def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -
 
     def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general"):
         captured["answer_mode"] = answer_mode
-        return RagAskResponse(answer="쟁점 정리 답변", is_ready=True, sources=[])
+        return RagAskResponse(
+            answer="쟁점 정리 답변",
+            is_ready=True,
+            sources=[],
+            evidence_status="insufficient",
+            evidence_warnings=["답변을 생성하기에 충분한 관련 근거가 없습니다."],
+        )
 
     monkeypatch.setattr("app.api.v1.routes.chat.RagService.answer", fake_answer)
 
@@ -208,3 +218,5 @@ def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -
     assert captured["answer_mode"] == "issue"
     assert message_response.json()["user_message"]["answer_mode"] == "issue"
     assert message_response.json()["assistant_message"]["answer_mode"] == "issue"
+    assert message_response.json()["assistant_message"]["evidence_status"] == "insufficient"
+    assert message_response.json()["assistant_message"]["evidence_warnings"] == ["답변을 생성하기에 충분한 관련 근거가 없습니다."]

@@ -53,6 +53,8 @@ def message_read(message: ChatMessage) -> ChatMessageRead:
         role=message.role,
         content=message.content,
         answer_mode=message.answer_mode,
+        evidence_status=message.evidence_status,
+        evidence_warnings=message.evidence_warnings or [],
         sources=sources_from_raw(message.sources),
         created_at=message.created_at.isoformat(),
     )

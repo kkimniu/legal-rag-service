@@ -54,23 +54,44 @@ class RagService:
                 answer="질문과 관련된 법률 또는 판례 근거를 찾지 못했습니다.",
                 sources=[],
                 is_ready=True,
+                evidence_status="none",
+                evidence_warnings=["검색된 법령 또는 판례 근거가 없습니다."],
+            )
+
+        reliable_sources, evidence_status, evidence_warnings = self._assess_sources(sources)
+        if not reliable_sources:
+            return RagAskResponse(
+                answer=self._insufficient_evidence_answer(evidence_warnings),
+                sources=sources,
+                is_ready=True,
+                evidence_status=evidence_status,
+                evidence_warnings=evidence_warnings,
             )
 
         try:
             answer = self._generate_answer(
                 question,
-                sources,
+                reliable_sources,
                 chat_history=chat_history,
                 answer_mode=answer_mode,
+                evidence_warnings=evidence_warnings,
             )
         except Exception as exc:
             return RagAskResponse(
                 answer=f"근거는 찾았지만 답변 생성 중 오류가 발생했습니다: {exc}",
-                sources=sources,
+                sources=reliable_sources,
                 is_ready=True,
+                evidence_status=evidence_status,
+                evidence_warnings=evidence_warnings,
             )
 
-        return RagAskResponse(answer=answer, sources=sources, is_ready=True)
+        return RagAskResponse(
+            answer=answer,
+            sources=reliable_sources,
+            is_ready=True,
+            evidence_status=evidence_status,
+            evidence_warnings=evidence_warnings,
+        )
 
     def _build_retrieval_question(self, question: str, chat_history: list[tuple[str, str]]) -> str:
         """Expand short follow-up questions with recent user context for retrieval."""
@@ -231,6 +252,48 @@ class RagService:
                 seen_ids.add(source.id)
         return merged
 
+    def _assess_sources(self, sources: list[RagSource]) -> tuple[list[RagSource], str, list[str]]:
+        reliable_sources = [source for source in sources if self._is_reliable_source(source)]
+        has_statute = any(source.metadata.get("evidence_type") == "statute" for source in reliable_sources)
+        has_precedent = any(source.metadata.get("evidence_type") == "precedent" for source in reliable_sources)
+
+        warnings: list[str] = []
+        weak_count = len(sources) - len(reliable_sources)
+        if weak_count > 0:
+            warnings.append(f"관련성이 낮은 검색 근거 {weak_count}개를 답변 생성에서 제외했습니다.")
+        if not has_statute:
+            warnings.append("신뢰 가능한 법령 근거가 부족합니다.")
+        if not has_precedent:
+            warnings.append("신뢰 가능한 판례 근거가 부족합니다.")
+        if len(reliable_sources) < settings.rag_min_reliable_sources:
+            warnings.append("답변을 생성하기에 충분한 관련 근거가 없습니다.")
+
+        if not reliable_sources:
+            return [], "insufficient", warnings
+        if warnings:
+            return reliable_sources, "partial", warnings
+        return reliable_sources, "sufficient", []
+
+    def _is_reliable_source(self, source: RagSource) -> bool:
+        if source.score is None:
+            return True
+        return source.score <= settings.rag_max_source_distance
+
+    def _insufficient_evidence_answer(self, warnings: list[str]) -> str:
+        warning_lines = "\n".join(f"- {warning}" for warning in warnings)
+        return (
+            "답변 요약\n"
+            "검색된 근거의 관련성이 낮아 현재 질문에 대해 근거 기반 답변을 생성하기 어렵습니다.\n\n"
+            "관련 법령\n"
+            "- 검색된 법령 근거가 부족합니다.\n\n"
+            "관련 판례\n"
+            "- 검색된 판례 근거가 부족합니다.\n\n"
+            "주의사항\n"
+            f"{warning_lines}\n"
+            "- 질문의 사실관계, 분야, 사건 유형, 계약/처분/판결 관련 정보를 더 구체화한 뒤 다시 질문해 주세요.\n"
+            "- 이 답변은 검색된 법률/판례 데이터에 기반한 참고 정보이며, 구체적인 사건에는 전문가 상담이 필요할 수 있습니다."
+        )
+
     def _extract_keywords(self, question: str) -> list[str]:
         stopwords = {
             "어떤",
@@ -276,6 +339,7 @@ class RagService:
         sources: list[RagSource],
         chat_history: list[tuple[str, str]] | None = None,
         answer_mode: str = "general",
+        evidence_warnings: list[str] | None = None,
     ) -> str:
         model = ChatOpenAI(
             model=settings.openai_model,
@@ -285,6 +349,7 @@ class RagService:
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])
         mode_instruction = self._answer_mode_instruction(answer_mode)
+        evidence_warning_text = self._format_evidence_warnings(evidence_warnings or [])
         response = model.invoke(
             [
                 SystemMessage(
@@ -308,6 +373,7 @@ class RagService:
                     content=(
                         f"최근 대화\n{conversation_context}\n\n"
                         f"답변 모드\n{mode_instruction}\n\n"
+                        f"근거 품질 경고\n{evidence_warning_text}\n\n"
                         f"질문:\n{question}\n\n"
                         f"검색된 근거:\n{context}\n\n"
                         "검색된 근거만 사용해서 한국어로 답변하세요. "
@@ -349,6 +415,11 @@ class RagService:
             "general": "기본 답변 모드입니다. 질문에 직접 답하고 관련 법령과 판례를 균형 있게 정리하세요.",
         }
         return instructions.get(answer_mode, instructions["general"])
+
+    def _format_evidence_warnings(self, warnings: list[str]) -> str:
+        if not warnings:
+            return "경고 없음"
+        return "\n".join(f"- {warning}" for warning in warnings)
 
     def _format_chat_history(self, chat_history: list[tuple[str, str]]) -> str:
         if not chat_history:

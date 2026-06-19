@@ -85,6 +85,8 @@ def add_user_message(
         role="user",
         content=content.strip(),
         answer_mode=answer_mode,
+        evidence_status=None,
+        evidence_warnings=[],
         sources=[],
     )
     if session.title == "새 대화":
@@ -110,6 +112,8 @@ def add_assistant_message(
         role="assistant",
         content=response.answer,
         answer_mode=answer_mode,
+        evidence_status=response.evidence_status,
+        evidence_warnings=response.evidence_warnings,
         sources=[source.model_dump() for source in response.sources],
     )
     session.updated_at = datetime.now(UTC)

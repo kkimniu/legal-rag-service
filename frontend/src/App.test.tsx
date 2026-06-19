@@ -73,6 +73,8 @@ describe('App', () => {
         role: 'user',
         content: '계약 불이행 책임은 무엇인가요?',
         answer_mode: 'issue',
+        evidence_status: null,
+        evidence_warnings: [],
         sources: [],
         created_at: '2026-06-14T10:01:00',
       },
@@ -81,6 +83,8 @@ describe('App', () => {
         role: 'assistant',
         content: '검색 근거에 기반한 답변입니다.',
         answer_mode: 'issue',
+        evidence_status: 'partial',
+        evidence_warnings: ['신뢰 가능한 법령 근거가 부족합니다.'],
         created_at: '2026-06-14T10:01:01',
         sources: [
           {
@@ -116,6 +120,8 @@ describe('App', () => {
     });
     expect(await screen.findByText('검색 근거에 기반한 답변입니다.')).toBeInTheDocument();
     expect(screen.getAllByText('쟁점 정리').length).toBeGreaterThan(1);
+    expect(screen.getByText('근거 일부 부족')).toBeInTheDocument();
+    expect(screen.getByText('근거 품질 경고 1개')).toBeInTheDocument();
     expect(screen.getByText('검색 근거 1개')).toBeInTheDocument();
     expect(screen.getByText('판례 근거 1')).toBeInTheDocument();
     expect(screen.getByText('2024다12345')).toBeInTheDocument();

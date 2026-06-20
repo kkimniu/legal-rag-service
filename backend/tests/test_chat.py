@@ -196,7 +196,7 @@ def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -
 
     captured = {}
 
-    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general"):
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None):
         captured["answer_mode"] = answer_mode
         return RagAskResponse(
             answer="쟁점 정리 답변",
@@ -220,3 +220,53 @@ def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -
     assert message_response.json()["assistant_message"]["answer_mode"] == "issue"
     assert message_response.json()["assistant_message"]["evidence_status"] == "insufficient"
     assert message_response.json()["assistant_message"]["evidence_warnings"] == ["답변을 생성하기에 충분한 관련 근거가 없습니다."]
+
+
+def test_chat_message_api_passes_case_notes_to_rag(client: TestClient, monkeypatch) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "chat-case-context@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "chat-case-context@example.com", "password": "password123"},
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "임대차 보증금 반환", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/notes",
+        json={"title": "핵심 사실", "content": "계약 종료 후 보증금을 받지 못함"},
+        headers=headers,
+    )
+    session_response = client.post(
+        "/api/v1/chat/sessions",
+        json={
+            "title": "보증금 상담",
+            "domain_code": "01_civil_law",
+            "case_id": case_response.json()["id"],
+        },
+        headers=headers,
+    )
+
+    captured = {}
+
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None):
+        captured["case_context"] = case_context
+        return RagAskResponse(answer="사건 메모 기반 답변", is_ready=True, sources=[])
+
+    monkeypatch.setattr("app.api.v1.routes.chat.RagService.answer", fake_answer)
+
+    message_response = client.post(
+        f"/api/v1/chat/sessions/{session_response.json()['id']}/messages",
+        json={"content": "어떤 자료를 준비해야 해?"},
+        headers=headers,
+    )
+
+    assert message_response.status_code == 200
+    assert "임대차 보증금 반환" in captured["case_context"]
+    assert "계약 종료 후 보증금을 받지 못함" in captured["case_context"]

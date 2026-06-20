@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.chat import ChatSession
 from app.models.legal_case import CaseNote, LegalCase
+from app.core.config import settings
 
 
 def create_legal_case(
@@ -91,3 +92,24 @@ def count_case_chats(db: Session, case_id: int) -> int:
     """Count chat sessions linked to one legal matter."""
     statement = select(func.count(ChatSession.id)).where(ChatSession.case_id == case_id)
     return int(db.scalar(statement) or 0)
+
+
+def build_case_context(db: Session, legal_case: LegalCase) -> str:
+    """Build a compact personal case context for RAG answer generation."""
+    parts = [
+        f"사건명: {legal_case.title}",
+        f"상태: {legal_case.status}",
+    ]
+    if legal_case.summary:
+        parts.append(f"사건 요약: {legal_case.summary}")
+    if legal_case.domain_code:
+        parts.append(f"분야 코드: {legal_case.domain_code}")
+
+    notes = list_case_notes(db, legal_case.id, limit=20)
+    if notes:
+        parts.append("사건 메모:")
+        for index, note in enumerate(notes, start=1):
+            parts.append(f"[메모 {index}] {note.title}\n{note.content}")
+
+    context = "\n\n".join(parts)
+    return context[: settings.rag_case_context_max_chars]

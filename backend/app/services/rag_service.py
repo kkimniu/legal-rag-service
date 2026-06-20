@@ -22,6 +22,7 @@ class RagService:
         domain_code: str | None = None,
         chat_history: list[tuple[str, str]] | None = None,
         answer_mode: str = "general",
+        case_context: str | None = None,
     ) -> RagAskResponse:
         """Retrieve legal/statute chunks and precedent chunks, then generate a grounded answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
@@ -40,7 +41,7 @@ class RagService:
             )
 
         try:
-            retrieval_question = self._build_retrieval_question(question, chat_history or [])
+            retrieval_question = self._build_retrieval_question(question, chat_history or [], case_context=case_context)
             sources = self._retrieve_sources(retrieval_question, question, persist_directory, domain_code)
         except Exception as exc:
             return RagAskResponse(
@@ -75,6 +76,7 @@ class RagService:
                 chat_history=chat_history,
                 answer_mode=answer_mode,
                 evidence_warnings=evidence_warnings,
+                case_context=case_context,
             )
         except Exception as exc:
             return RagAskResponse(
@@ -93,18 +95,28 @@ class RagService:
             evidence_warnings=evidence_warnings,
         )
 
-    def _build_retrieval_question(self, question: str, chat_history: list[tuple[str, str]]) -> str:
+    def _build_retrieval_question(
+        self,
+        question: str,
+        chat_history: list[tuple[str, str]],
+        case_context: str | None = None,
+    ) -> str:
         """Expand short follow-up questions with recent user context for retrieval."""
         previous_user_turns = [
             content.strip()
             for role, content in chat_history
             if role == "user" and content.strip()
         ][-3:]
-        if not previous_user_turns:
-            return question
+        sections = []
+        if case_context and case_context.strip():
+            sections.append(f"개인 사건 메모:\n{case_context.strip()[:1000]}")
 
-        history = "\n".join(f"- {turn[:300]}" for turn in previous_user_turns)
-        return f"이전 사용자 질문 맥락:\n{history}\n\n현재 후속 질문:\n{question}"
+        if previous_user_turns:
+            history = "\n".join(f"- {turn[:300]}" for turn in previous_user_turns)
+            sections.append(f"이전 사용자 질문 맥락:\n{history}")
+
+        sections.append(f"현재 질문:\n{question}")
+        return "\n\n".join(sections)
 
     def _resolve_chroma_directory(self) -> Path | None:
         candidates = [
@@ -340,6 +352,7 @@ class RagService:
         chat_history: list[tuple[str, str]] | None = None,
         answer_mode: str = "general",
         evidence_warnings: list[str] | None = None,
+        case_context: str | None = None,
     ) -> str:
         model = ChatOpenAI(
             model=settings.openai_model,
@@ -350,6 +363,7 @@ class RagService:
         conversation_context = self._format_chat_history(chat_history or [])
         mode_instruction = self._answer_mode_instruction(answer_mode)
         evidence_warning_text = self._format_evidence_warnings(evidence_warnings or [])
+        personal_case_context = self._format_case_context(case_context)
         response = model.invoke(
             [
                 SystemMessage(
@@ -372,6 +386,7 @@ class RagService:
                 HumanMessage(
                     content=(
                         f"최근 대화\n{conversation_context}\n\n"
+                        f"개인 사건 메모\n{personal_case_context}\n\n"
                         f"답변 모드\n{mode_instruction}\n\n"
                         f"근거 품질 경고\n{evidence_warning_text}\n\n"
                         f"질문:\n{question}\n\n"
@@ -415,6 +430,11 @@ class RagService:
             "general": "기본 답변 모드입니다. 질문에 직접 답하고 관련 법령과 판례를 균형 있게 정리하세요.",
         }
         return instructions.get(answer_mode, instructions["general"])
+
+    def _format_case_context(self, case_context: str | None) -> str:
+        if not case_context or not case_context.strip():
+            return "연결된 개인 사건 메모 없음"
+        return case_context.strip()
 
     def _format_evidence_warnings(self, warnings: list[str]) -> str:
         if not warnings:

@@ -26,7 +26,7 @@ from app.services.chat_service import (
     sources_from_raw,
     update_chat_session_pin,
 )
-from app.services.legal_case_service import get_legal_case
+from app.services.legal_case_service import build_case_context, get_legal_case
 from app.services.rag_service import RagService
 
 router = APIRouter()
@@ -127,12 +127,18 @@ def send_message(
 
     previous_messages = list_chat_messages(db, session.id, limit=12)
     chat_history = [(message.role, message.content) for message in previous_messages]
+    case_context = None
+    if session.case_id is not None:
+        legal_case = get_legal_case(db, current_user.id, session.case_id)
+        if legal_case is not None:
+            case_context = build_case_context(db, legal_case)
     user_message = add_user_message(db, session, payload.content, payload.answer_mode)
     response = RagService().answer(
         payload.content,
         domain_code=session.domain_code,
         chat_history=chat_history,
         answer_mode=payload.answer_mode,
+        case_context=case_context,
     )
     assistant_message = add_assistant_message(db, session, response, payload.answer_mode)
 

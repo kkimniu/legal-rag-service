@@ -21,7 +21,23 @@ def test_build_retrieval_question_expands_follow_up_with_user_context() -> None:
 def test_build_retrieval_question_uses_original_question_without_history() -> None:
     service = RagService()
 
-    assert service._build_retrieval_question("손해배상 책임은 무엇인가요?", []) == "손해배상 책임은 무엇인가요?"
+    retrieval_question = service._build_retrieval_question("손해배상 책임은 무엇인가요?", [])
+
+    assert "손해배상 책임은 무엇인가요?" in retrieval_question
+
+
+def test_build_retrieval_question_includes_case_context() -> None:
+    service = RagService()
+
+    retrieval_question = service._build_retrieval_question(
+        "그럼 입증자료는 뭐가 필요해?",
+        [],
+        case_context="사건명: 임대차 보증금 반환\n계약 종료 후 보증금을 받지 못함",
+    )
+
+    assert "개인 사건 메모" in retrieval_question
+    assert "임대차 보증금 반환" in retrieval_question
+    assert "입증자료" in retrieval_question
 
 
 def test_assess_sources_filters_weak_evidence() -> None:

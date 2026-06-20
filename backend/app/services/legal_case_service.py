@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -213,6 +214,7 @@ def create_case_attachment(db: Session, legal_case: LegalCase, upload_file: Uplo
                 raise ValueError("upload_too_large")
             target.write(chunk)
 
+    extracted_text, extraction_status = extract_attachment_text(storage_path, upload_file.content_type)
     attachment = CaseAttachment(
         case_id=legal_case.id,
         original_filename=original_name or "attachment",
@@ -220,6 +222,8 @@ def create_case_attachment(db: Session, legal_case: LegalCase, upload_file: Uplo
         storage_path=str(storage_path),
         content_type=upload_file.content_type,
         size_bytes=size,
+        extracted_text=extracted_text,
+        extraction_status=extraction_status,
     )
     legal_case.updated_at = datetime.now(UTC)
     db.add(attachment)
@@ -280,8 +284,92 @@ def build_case_context(db: Session, legal_case: LegalCase) -> str:
         for index, note in enumerate(notes, start=1):
             parts.append(f"[메모 {index}] {note.title}\n{note.content}")
 
+    attachment_context = build_case_attachment_context(db, legal_case.id)
+    if attachment_context:
+        parts.append(attachment_context)
+
     context = "\n\n".join(parts)
     return context[: settings.rag_case_context_max_chars]
+
+
+def build_case_attachment_context(db: Session, case_id: int) -> str:
+    """Build compact extracted attachment text for answer generation."""
+    attachments = list_case_attachments(db, case_id, limit=20)
+    sections: list[str] = []
+    remaining_chars = settings.case_attachment_context_max_chars
+
+    for index, attachment in enumerate(attachments, start=1):
+        if remaining_chars <= 0:
+            break
+        header = (
+            f"[첨부자료 {index}] {attachment.original_filename} "
+            f"(status={attachment.extraction_status}, size={attachment.size_bytes})\n"
+        )
+        text = (attachment.extracted_text or "").strip() or "추출 가능한 텍스트가 없습니다."
+        available = max(0, remaining_chars - len(header))
+        if available <= 0:
+            break
+        clipped_text = text[:available]
+        sections.append(f"{header}{clipped_text}")
+        remaining_chars -= len(header) + len(clipped_text)
+
+    if not sections:
+        return ""
+    return "사건 첨부자료 추출 내용:\n" + "\n\n".join(sections)
+
+
+def extract_attachment_text(path: Path, content_type: str | None = None) -> tuple[str, str]:
+    """Extract text from supported user-uploaded case files."""
+    suffix = path.suffix.lower()
+    try:
+        if suffix in {".txt", ".md", ".csv", ".json", ".log"} or (content_type or "").startswith("text/"):
+            return _clip_extracted_text(_read_text_file(path)), "completed"
+        if suffix == ".pdf":
+            return _extract_pdf_text(path)
+        if suffix == ".docx":
+            return _extract_docx_text(path)
+    except Exception:
+        return "", "failed"
+    return "", "unsupported"
+
+
+def _read_text_file(path: Path) -> str:
+    data = path.read_bytes()
+    for encoding in ("utf-8", "utf-8-sig", "cp949", "euc-kr"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="ignore")
+
+
+def _extract_pdf_text(path: Path) -> tuple[str, str]:
+    try:
+        from pypdf import PdfReader
+    except Exception:
+        return "", "unsupported"
+
+    reader = PdfReader(str(path))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    text = _clip_extracted_text(text)
+    return text, "completed" if text else "empty"
+
+
+def _extract_docx_text(path: Path) -> tuple[str, str]:
+    try:
+        from docx import Document
+    except Exception:
+        return "", "unsupported"
+
+    document = Document(str(path))
+    parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+    text = _clip_extracted_text("\n".join(parts))
+    return text, "completed" if text else "empty"
+
+
+def _clip_extracted_text(text: str) -> str:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    return normalized[: settings.case_attachment_extract_max_chars]
 
 
 def _fallback_case_insight(legal_case: LegalCase, notes: list[CaseNote]) -> dict[str, object]:

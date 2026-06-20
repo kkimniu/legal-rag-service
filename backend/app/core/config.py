@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     openai_temperature: float = 0.2
     upload_directory: str = "./uploads"
     max_upload_size_mb: int = 20
+    case_attachment_extract_max_chars: int = 20000
+    case_attachment_context_max_chars: int = 3500
 
     @property
     def cors_origins(self) -> list[str]:

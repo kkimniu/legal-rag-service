@@ -433,6 +433,14 @@ export function App() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
+  function attachmentStatusLabel(status: string) {
+    if (status === 'completed') return '텍스트 추출 완료';
+    if (status === 'empty') return '추출 텍스트 없음';
+    if (status === 'unsupported') return '텍스트 추출 미지원';
+    if (status === 'failed') return '텍스트 추출 실패';
+    return '추출 대기';
+  }
+
   async function handleUploadCaseAttachment(event: ChangeEvent<HTMLInputElement>) {
     if (!activeCase || !event.target.files?.[0]) return;
     const file = event.target.files[0];
@@ -770,6 +778,7 @@ export function App() {
                               <strong>{attachment.original_filename}</strong>
                               <small>
                                 {formatFileSize(attachment.size_bytes)} · {attachment.content_type ?? '파일'} ·{' '}
+                                {attachmentStatusLabel(attachment.extraction_status)} 쨌 {attachment.extracted_text_chars}자 쨌{' '}
                                 {new Date(attachment.created_at).toLocaleString('ko-KR')}
                               </small>
                             </div>

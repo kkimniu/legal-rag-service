@@ -69,6 +69,8 @@ def attachment_read(attachment) -> CaseAttachmentRead:
         original_filename=attachment.original_filename,
         content_type=attachment.content_type,
         size_bytes=attachment.size_bytes,
+        extraction_status=attachment.extraction_status,
+        extracted_text_chars=len(attachment.extracted_text or ""),
         created_at=attachment.created_at.isoformat(),
     )
 

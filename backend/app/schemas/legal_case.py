@@ -79,4 +79,6 @@ class CaseAttachmentRead(BaseModel):
     original_filename: str
     content_type: str | None = None
     size_bytes: int
+    extraction_status: str
+    extracted_text_chars: int = 0
     created_at: str

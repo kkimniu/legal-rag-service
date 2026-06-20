@@ -39,6 +39,8 @@ export type CaseAttachment = {
   original_filename: string;
   content_type?: string | null;
   size_bytes: number;
+  extraction_status: string;
+  extracted_text_chars: number;
   created_at: string;
 };
 

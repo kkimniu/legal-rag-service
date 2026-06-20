@@ -59,6 +59,8 @@ class CaseAttachment(Base):
     storage_path: Mapped[str] = mapped_column(Text)
     content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     size_bytes: Mapped[int] = mapped_column(default=0)
+    extracted_text: Mapped[str] = mapped_column(Text, default="")
+    extraction_status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     case: Mapped[LegalCase] = relationship(back_populates="attachments")

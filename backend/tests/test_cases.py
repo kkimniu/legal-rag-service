@@ -207,6 +207,8 @@ def test_case_api_uploads_lists_and_deletes_attachment(client: TestClient, tmp_p
     assert upload_response.json()["original_filename"] == "contract.txt"
     assert upload_response.json()["content_type"] == "text/plain"
     assert upload_response.json()["size_bytes"] == len(b"contract body")
+    assert upload_response.json()["extraction_status"] == "completed"
+    assert upload_response.json()["extracted_text_chars"] == len("contract body")
     assert list_response.status_code == 200
     assert len(list_response.json()) == 1
     assert delete_response.status_code == 204

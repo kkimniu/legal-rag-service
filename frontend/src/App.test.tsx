@@ -244,6 +244,8 @@ describe('App', () => {
       original_filename: 'contract.txt',
       content_type: 'text/plain',
       size_bytes: 13,
+      extraction_status: 'completed',
+      extracted_text_chars: 13,
       created_at: '2026-06-14T12:05:00',
     });
     mockedDeleteCaseAttachment.mockResolvedValue(true);

@@ -323,7 +323,8 @@ button:disabled {
 
 .case-overview div,
 .case-recent-note,
-.case-linked-sessions {
+.case-linked-sessions,
+.case-attachments {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   background: #ffffff;
@@ -410,16 +411,86 @@ button:disabled {
 }
 
 .case-linked-sessions,
-.case-recent-note {
+.case-recent-note,
+.case-attachments {
   display: grid;
   gap: 8px;
 }
 
 .case-linked-sessions h4,
-.case-recent-note h4 {
+.case-recent-note h4,
+.case-attachments h4 {
   margin: 0;
   color: #172033;
   font-size: 13px;
+}
+
+.case-attachment-heading,
+.case-attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-attachment-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: #eef2f6;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.case-attachment-upload:hover {
+  background: #d8dee8;
+}
+
+.case-attachment-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.case-attachment-list {
+  display: grid;
+  gap: 6px;
+}
+
+.case-attachment-item {
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f7fafc;
+  padding: 8px 10px;
+}
+
+.case-attachment-item div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.case-attachment-item strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 13px;
+}
+
+.case-attachment-item small {
+  color: #536174;
+  font-size: 12px;
+}
+
+.case-attachment-item button {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 6px 9px;
+  font-size: 12px;
 }
 
 .case-linked-session-list {

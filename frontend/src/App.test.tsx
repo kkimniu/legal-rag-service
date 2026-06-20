@@ -6,12 +6,15 @@ import { fetchCurrentUser, login, register } from './api/auth';
 import {
   createCase,
   createCaseNote,
+  deleteCaseAttachment,
   deleteCaseNote,
+  fetchCaseAttachments,
   fetchCaseNotes,
   fetchCases,
   generateCaseInsight,
   updateCaseNote,
   updateCaseStatus,
+  uploadCaseAttachment,
 } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
@@ -34,12 +37,15 @@ vi.mock('./api/chat', () => ({
 vi.mock('./api/cases', () => ({
   createCase: vi.fn(),
   createCaseNote: vi.fn(),
+  deleteCaseAttachment: vi.fn(),
   deleteCaseNote: vi.fn(),
+  fetchCaseAttachments: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
   generateCaseInsight: vi.fn(),
   updateCaseNote: vi.fn(),
   updateCaseStatus: vi.fn(),
+  uploadCaseAttachment: vi.fn(),
 }));
 
 const mockedFetchCurrentUser = vi.mocked(fetchCurrentUser);
@@ -52,12 +58,15 @@ const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
+const mockedDeleteCaseAttachment = vi.mocked(deleteCaseAttachment);
 const mockedDeleteCaseNote = vi.mocked(deleteCaseNote);
+const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
 const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
+const mockedUploadCaseAttachment = vi.mocked(uploadCaseAttachment);
 
 describe('App', () => {
   beforeEach(() => {
@@ -66,9 +75,12 @@ describe('App', () => {
     mockedFetchChatSessions.mockResolvedValue([]);
     mockedFetchChatMessages.mockResolvedValue([]);
     mockedFetchCases.mockResolvedValue([]);
+    mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
     mockedUpdateCaseNote.mockResolvedValue(null);
+    mockedUploadCaseAttachment.mockResolvedValue(null);
+    mockedDeleteCaseAttachment.mockResolvedValue(false);
     mockedDeleteCaseNote.mockResolvedValue(false);
     mockedUpdateCaseStatus.mockResolvedValue(null);
   });
@@ -226,6 +238,15 @@ describe('App', () => {
       updated_at: '2026-06-14T12:20:00',
     });
     mockedDeleteCaseNote.mockResolvedValue(true);
+    mockedUploadCaseAttachment.mockResolvedValue({
+      id: 9,
+      case_id: 3,
+      original_filename: 'contract.txt',
+      content_type: 'text/plain',
+      size_bytes: 13,
+      created_at: '2026-06-14T12:05:00',
+    });
+    mockedDeleteCaseAttachment.mockResolvedValue(true);
 
     render(<App />);
 
@@ -235,6 +256,16 @@ describe('App', () => {
 
     expect(mockedCreateCase).toHaveBeenCalledWith('임대차 보증금 반환', '01_civil_law');
     expect((await screen.findAllByText('임대차 보증금 반환')).length).toBeGreaterThan(0);
+
+    const attachment = new File(['contract body'], 'contract.txt', { type: 'text/plain' });
+    await userEvent.upload(screen.getByLabelText('첨부 파일'), attachment);
+
+    expect(mockedUploadCaseAttachment).toHaveBeenCalledWith(3, attachment);
+    expect(await screen.findByText('contract.txt')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'contract.txt 첨부 삭제' }));
+
+    expect(mockedDeleteCaseAttachment).toHaveBeenCalledWith(3, 9);
+    expect(screen.queryByText('contract.txt')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('메모 제목'), '핵심 사실');
     await userEvent.type(screen.getByLabelText('메모 내용'), '계약 종료 후 보증금을 받지 못함');

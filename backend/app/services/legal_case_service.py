@@ -1,13 +1,16 @@
 from datetime import UTC, datetime
 import json
+from pathlib import Path
+from uuid import uuid4
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from fastapi import UploadFile
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.chat import ChatSession
-from app.models.legal_case import CaseNote, LegalCase
+from app.models.legal_case import CaseAttachment, CaseNote, LegalCase
 from app.core.config import settings
 
 
@@ -163,6 +166,75 @@ def delete_case_note(db: Session, legal_case: LegalCase, note: CaseNote) -> None
     """Delete one note under an owned legal matter."""
     legal_case.updated_at = datetime.now(UTC)
     db.delete(note)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(legal_case)
+
+
+def list_case_attachments(db: Session, case_id: int, limit: int = 100) -> list[CaseAttachment]:
+    """Return uploaded file metadata for one legal matter."""
+    statement = (
+        select(CaseAttachment)
+        .where(CaseAttachment.case_id == case_id)
+        .order_by(desc(CaseAttachment.created_at), desc(CaseAttachment.id))
+        .limit(limit)
+    )
+    return list(db.scalars(statement))
+
+
+def get_case_attachment(db: Session, case_id: int, attachment_id: int) -> CaseAttachment | None:
+    """Return one attachment only if it belongs to the given legal matter."""
+    statement = select(CaseAttachment).where(
+        CaseAttachment.id == attachment_id,
+        CaseAttachment.case_id == case_id,
+    )
+    return db.scalar(statement)
+
+
+def create_case_attachment(db: Session, legal_case: LegalCase, upload_file: UploadFile) -> CaseAttachment:
+    """Store an uploaded file on disk and persist its metadata."""
+    upload_root = Path(settings.upload_directory).resolve()
+    case_dir = upload_root / "cases" / str(legal_case.id)
+    case_dir.mkdir(parents=True, exist_ok=True)
+
+    original_name = Path(upload_file.filename or "attachment").name[:255]
+    suffix = Path(original_name).suffix[:20]
+    stored_name = f"{uuid4().hex}{suffix}"
+    storage_path = case_dir / stored_name
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+
+    size = 0
+    with storage_path.open("wb") as target:
+        while chunk := upload_file.file.read(1024 * 1024):
+            size += len(chunk)
+            if size > max_bytes:
+                target.close()
+                storage_path.unlink(missing_ok=True)
+                raise ValueError("upload_too_large")
+            target.write(chunk)
+
+    attachment = CaseAttachment(
+        case_id=legal_case.id,
+        original_filename=original_name or "attachment",
+        stored_filename=stored_name,
+        storage_path=str(storage_path),
+        content_type=upload_file.content_type,
+        size_bytes=size,
+    )
+    legal_case.updated_at = datetime.now(UTC)
+    db.add(attachment)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(attachment)
+    db.refresh(legal_case)
+    return attachment
+
+
+def delete_case_attachment(db: Session, legal_case: LegalCase, attachment: CaseAttachment) -> None:
+    """Delete one attachment record and its local file when present."""
+    Path(attachment.storage_path).unlink(missing_ok=True)
+    legal_case.updated_at = datetime.now(UTC)
+    db.delete(attachment)
     db.add(legal_case)
     db.commit()
     db.refresh(legal_case)

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     rag_max_source_distance: float = 1.25
     rag_min_reliable_sources: int = 1
     openai_temperature: float = 0.2
+    upload_directory: str = "./uploads"
+    max_upload_size_mb: int = 20
 
     @property
     def cors_origins(self) -> list[str]:

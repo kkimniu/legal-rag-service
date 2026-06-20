@@ -33,6 +33,15 @@ export type CaseInsight = {
   is_ready: boolean;
 };
 
+export type CaseAttachment = {
+  id: number;
+  case_id: number;
+  original_filename: string;
+  content_type?: string | null;
+  size_bytes: number;
+  created_at: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -121,6 +130,37 @@ export async function updateCaseNote(caseId: number, noteId: number, title: stri
 export async function deleteCaseNote(caseId: number, noteId: number): Promise<boolean> {
   try {
     await api.delete(`/cases/${caseId}/notes/${noteId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchCaseAttachments(caseId: number): Promise<CaseAttachment[]> {
+  try {
+    const response = await api.get<CaseAttachment[]>(`/cases/${caseId}/attachments`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function uploadCaseAttachment(caseId: number, file: File): Promise<CaseAttachment | null> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<CaseAttachment>(`/cases/${caseId}/attachments`, formData, {
+      headers: await getAuthHeaders(),
+    });
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCaseAttachment(caseId: number, attachmentId: number): Promise<boolean> {
+  try {
+    await api.delete(`/cases/${caseId}/attachments/${attachmentId}`, { headers: await getAuthHeaders() });
     return true;
   } catch {
     return false;

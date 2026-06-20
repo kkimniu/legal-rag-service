@@ -1,14 +1,18 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
 import {
   createCase,
   createCaseNote,
+  deleteCaseAttachment,
   deleteCaseNote,
+  fetchCaseAttachments,
   fetchCaseNotes,
   fetchCases,
   generateCaseInsight,
   updateCaseStatus,
   updateCaseNote,
+  uploadCaseAttachment,
+  type CaseAttachment,
   type CaseInsight,
   type CaseNote,
   type CaseStatus,
@@ -95,6 +99,7 @@ export function App() {
   const [cases, setCases] = useState<LegalCase[]>([]);
   const [activeCase, setActiveCase] = useState<LegalCase | null>(null);
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
+  const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
@@ -104,6 +109,7 @@ export function App() {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
@@ -186,6 +192,7 @@ export function App() {
     if (nextCases.length > 0 && !activeCase) {
       setActiveCase(nextCases[0]);
       setCaseNotes(await fetchCaseNotes(nextCases[0].id));
+      setCaseAttachments(await fetchCaseAttachments(nextCases[0].id));
     }
   }
 
@@ -201,6 +208,7 @@ export function App() {
       setActiveCase(nextCases[0] ?? null);
       setCaseInsight(null);
       setCaseNotes(nextCases[0] ? await fetchCaseNotes(nextCases[0].id) : []);
+      setCaseAttachments(nextCases[0] ? await fetchCaseAttachments(nextCases[0].id) : []);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
@@ -220,6 +228,7 @@ export function App() {
     setCases([]);
     setActiveCase(null);
     setCaseNotes([]);
+    setCaseAttachments([]);
     setCaseInsight(null);
     setNoteTitle('');
     setNoteContent('');
@@ -288,6 +297,7 @@ export function App() {
     setNoteContent('');
     setFilterSessionsByCase(true);
     setCaseNotes(await fetchCaseNotes(legalCase.id));
+    setCaseAttachments(await fetchCaseAttachments(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
 
@@ -338,6 +348,7 @@ export function App() {
     setEditingNoteId(null);
     setFilterSessionsByCase(true);
     setCaseNotes([]);
+    setCaseAttachments([]);
     setCaseTitle('');
     setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
@@ -414,6 +425,43 @@ export function App() {
     }
     setCaseInsight(null);
     setChatStatus('사건 메모를 삭제했습니다.');
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  async function handleUploadCaseAttachment(event: ChangeEvent<HTMLInputElement>) {
+    if (!activeCase || !event.target.files?.[0]) return;
+    const file = event.target.files[0];
+    setIsUploadingAttachment(true);
+    const attachment = await uploadCaseAttachment(activeCase.id, file);
+    event.target.value = '';
+    setIsUploadingAttachment(false);
+    if (!attachment) {
+      setChatStatus('첨부자료를 업로드하지 못했습니다.');
+      return;
+    }
+    const now = attachment.created_at;
+    setCaseAttachments((items) => [attachment, ...items]);
+    setCases((items) => items.map((item) => (item.id === activeCase.id ? { ...item, updated_at: now } : item)));
+    setActiveCase((item) => (item && item.id === activeCase.id ? { ...item, updated_at: now } : item));
+    setCaseInsight(null);
+    setChatStatus('첨부자료를 추가했습니다.');
+  }
+
+  async function handleDeleteCaseAttachment(attachment: CaseAttachment) {
+    if (!activeCase) return;
+    const deleted = await deleteCaseAttachment(activeCase.id, attachment.id);
+    if (!deleted) {
+      setChatStatus('첨부자료를 삭제하지 못했습니다.');
+      return;
+    }
+    setCaseAttachments((items) => items.filter((item) => item.id !== attachment.id));
+    setCaseInsight(null);
+    setChatStatus('첨부자료를 삭제했습니다.');
   }
 
   async function handleRegenerate() {
@@ -533,6 +581,7 @@ export function App() {
                 <button type="button" className="secondary-button" onClick={() => {
                   setActiveCase(null);
                   setCaseNotes([]);
+                  setCaseAttachments([]);
                   setCaseInsight(null);
                   setFilterSessionsByCase(true);
                 }}>
@@ -698,6 +747,45 @@ export function App() {
                       </div>
                     ) : (
                       <p className="empty-state">이 사건에 연결된 대화가 없습니다.</p>
+                    )}
+                  </section>
+                  <section className="case-attachments">
+                    <div className="case-attachment-heading">
+                      <h4>첨부자료</h4>
+                      <label className="case-attachment-upload">
+                        <input
+                          type="file"
+                          aria-label="첨부 파일"
+                          onChange={handleUploadCaseAttachment}
+                          disabled={isUploadingAttachment}
+                        />
+                        <span>{isUploadingAttachment ? '업로드 중' : '파일 추가'}</span>
+                      </label>
+                    </div>
+                    {caseAttachments.length > 0 ? (
+                      <div className="case-attachment-list">
+                        {caseAttachments.map((attachment) => (
+                          <article className="case-attachment-item" key={attachment.id}>
+                            <div>
+                              <strong>{attachment.original_filename}</strong>
+                              <small>
+                                {formatFileSize(attachment.size_bytes)} · {attachment.content_type ?? '파일'} ·{' '}
+                                {new Date(attachment.created_at).toLocaleString('ko-KR')}
+                              </small>
+                            </div>
+                            <button
+                              type="button"
+                              className="danger-button"
+                              aria-label={`${attachment.original_filename} 첨부 삭제`}
+                              onClick={() => handleDeleteCaseAttachment(attachment)}
+                            >
+                              삭제
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-state">이 사건에 첨부된 자료가 없습니다.</p>
                     )}
                   </section>
                   {recentCaseNote && (

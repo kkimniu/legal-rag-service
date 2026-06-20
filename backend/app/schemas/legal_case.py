@@ -69,3 +69,14 @@ class CaseNoteRead(BaseModel):
     content: str
     created_at: str
     updated_at: str
+
+
+class CaseAttachmentRead(BaseModel):
+    """Uploaded file metadata under one legal matter."""
+
+    id: int
+    case_id: int
+    original_filename: str
+    content_type: str | None = None
+    size_bytes: int
+    created_at: str

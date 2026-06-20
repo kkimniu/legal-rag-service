@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.session import Base, get_db
 from app.main import app
 from app.models.chat import ChatMessage, ChatSession  # noqa: F401 - ensure metadata includes chat models
-from app.models.legal_case import CaseNote, LegalCase  # noqa: F401 - ensure metadata includes case models
+from app.models.legal_case import CaseAttachment, CaseNote, LegalCase  # noqa: F401 - ensure metadata includes case models
 from app.models.rag_query import RagQuery  # noqa: F401 - ensure metadata includes RagQuery
 from app.models.user import User  # noqa: F401 - ensure metadata includes User
 

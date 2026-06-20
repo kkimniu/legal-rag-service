@@ -174,6 +174,45 @@ def test_case_api_updates_and_deletes_case_note(client: TestClient) -> None:
     assert cases_response.json()[0]["note_count"] == 0
 
 
+def test_case_api_uploads_lists_and_deletes_attachment(client: TestClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "upload_directory", str(tmp_path / "uploads"))
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-attachment@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-attachment@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Attachment case", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+
+    upload_response = client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/attachments",
+        headers=headers,
+        files={"file": ("contract.txt", b"contract body", "text/plain")},
+    )
+    list_response = client.get(f"/api/v1/cases/{case_response.json()['id']}/attachments", headers=headers)
+    delete_response = client.delete(
+        f"/api/v1/cases/{case_response.json()['id']}/attachments/{upload_response.json()['id']}",
+        headers=headers,
+    )
+    empty_list_response = client.get(f"/api/v1/cases/{case_response.json()['id']}/attachments", headers=headers)
+
+    assert upload_response.status_code == 201
+    assert upload_response.json()["original_filename"] == "contract.txt"
+    assert upload_response.json()["content_type"] == "text/plain"
+    assert upload_response.json()["size_bytes"] == len(b"contract body")
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+    assert delete_response.status_code == 204
+    assert empty_list_response.json() == []
+
+
 def test_chat_session_rejects_other_users_case(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",

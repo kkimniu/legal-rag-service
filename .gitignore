@@ -53,6 +53,8 @@ data/raw/precedents/incoming/**
 # Logs and local runtime files
 *.log
 logs/
+uploads/
+backend/uploads/
 tmp/
 temp/
 celerybeat-schedule

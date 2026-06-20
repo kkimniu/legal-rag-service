@@ -25,6 +25,11 @@ class LegalCase(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    attachments: Mapped[list["CaseAttachment"]] = relationship(
+        back_populates="case",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class CaseNote(Base):
@@ -40,3 +45,20 @@ class CaseNote(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
 
     case: Mapped[LegalCase] = relationship(back_populates="notes")
+
+
+class CaseAttachment(Base):
+    """Uploaded file metadata attached to one personal legal matter."""
+
+    __tablename__ = "case_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("legal_cases.id", ondelete="CASCADE"), index=True)
+    original_filename: Mapped[str] = mapped_column(String(255))
+    stored_filename: Mapped[str] = mapped_column(String(255))
+    storage_path: Mapped[str] = mapped_column(Text)
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    size_bytes: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    case: Mapped[LegalCase] = relationship(back_populates="attachments")

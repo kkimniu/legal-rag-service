@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.legal_case import CaseNote, LegalCase
 from app.models.user import User
 from app.schemas.legal_case import (
+    CaseAttachmentRead,
     CaseInsightRead,
     CaseNoteCreate,
     CaseNoteRead,
@@ -17,12 +18,16 @@ from app.schemas.legal_case import (
 from app.services.legal_case_service import (
     count_case_chats,
     count_case_notes,
+    create_case_attachment,
     create_case_note,
     create_legal_case,
+    delete_case_attachment,
     delete_case_note,
     generate_case_insight,
+    get_case_attachment,
     get_case_note,
     get_legal_case,
+    list_case_attachments,
     list_case_notes,
     list_legal_cases,
     update_case_note,
@@ -54,6 +59,17 @@ def note_read(note: CaseNote) -> CaseNoteRead:
         content=note.content,
         created_at=note.created_at.isoformat(),
         updated_at=note.updated_at.isoformat(),
+    )
+
+
+def attachment_read(attachment) -> CaseAttachmentRead:
+    return CaseAttachmentRead(
+        id=attachment.id,
+        case_id=attachment.case_id,
+        original_filename=attachment.original_filename,
+        content_type=attachment.content_type,
+        size_bytes=attachment.size_bytes,
+        created_at=attachment.created_at.isoformat(),
     )
 
 
@@ -171,3 +187,52 @@ def delete_note(
     if note is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case note was not found.")
     delete_case_note(db, legal_case, note)
+
+
+@router.get("/{case_id}/attachments", response_model=list[CaseAttachmentRead])
+def read_attachments(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CaseAttachmentRead]:
+    """Return uploaded file metadata for one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return [attachment_read(attachment) for attachment in list_case_attachments(db, legal_case.id)]
+
+
+@router.post("/{case_id}/attachments", response_model=CaseAttachmentRead, status_code=status.HTTP_201_CREATED)
+def upload_attachment(
+    case_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseAttachmentRead:
+    """Upload one file under an owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    try:
+        return attachment_read(create_case_attachment(db, legal_case, file))
+    except ValueError as exc:
+        if str(exc) == "upload_too_large":
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Upload file is too large.") from exc
+        raise
+
+
+@router.delete("/{case_id}/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attachment(
+    case_id: int,
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete one uploaded file under an owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    attachment = get_case_attachment(db, legal_case.id, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+    delete_case_attachment(db, legal_case, attachment)

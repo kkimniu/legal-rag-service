@@ -50,6 +50,20 @@ def get_legal_case(db: Session, user_id: int, case_id: int) -> LegalCase | None:
     return db.scalar(statement)
 
 
+def update_legal_case_status(
+    db: Session,
+    legal_case: LegalCase,
+    status: str,
+) -> LegalCase:
+    """Update the workflow status for one owned legal matter."""
+    legal_case.status = status
+    legal_case.updated_at = datetime.now(UTC)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(legal_case)
+    return legal_case
+
+
 def create_case_note(
     db: Session,
     legal_case: LegalCase,

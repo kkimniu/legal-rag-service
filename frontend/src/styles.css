@@ -310,6 +310,18 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.case-status-select {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid #d8dee8;
+  background: #f7fafc;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 8px;
+}
+
 .case-summary {
   margin: 0;
   color: #2d3848;

@@ -5,7 +5,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.legal_case import CaseNote, LegalCase
 from app.models.user import User
-from app.schemas.legal_case import CaseNoteCreate, CaseNoteRead, LegalCaseCreate, LegalCaseRead
+from app.schemas.legal_case import CaseNoteCreate, CaseNoteRead, LegalCaseCreate, LegalCaseRead, LegalCaseUpdate
 from app.services.legal_case_service import (
     count_case_chats,
     count_case_notes,
@@ -14,6 +14,7 @@ from app.services.legal_case_service import (
     get_legal_case,
     list_case_notes,
     list_legal_cases,
+    update_legal_case_status,
 )
 
 router = APIRouter()
@@ -69,6 +70,20 @@ def read_cases(
 ) -> list[LegalCaseRead]:
     """Return personal legal matters for the current user."""
     return [case_read(legal_case, db) for legal_case in list_legal_cases(db, current_user.id)]
+
+
+@router.patch("/{case_id}", response_model=LegalCaseRead)
+def update_case(
+    case_id: int,
+    payload: LegalCaseUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> LegalCaseRead:
+    """Update one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return case_read(update_legal_case_status(db, legal_case, payload.status), db)
 
 
 @router.get("/{case_id}/notes", response_model=list[CaseNoteRead])

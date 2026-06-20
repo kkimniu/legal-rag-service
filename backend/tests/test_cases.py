@@ -73,6 +73,32 @@ def test_case_api_creates_notes_and_links_chat_session(client: TestClient) -> No
     assert cases_response.json()[0]["chat_count"] == 1
 
 
+def test_case_api_updates_owned_case_status(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-status@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-status@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Status case", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+
+    response = client.patch(
+        f"/api/v1/cases/{case_response.json()['id']}",
+        json={"status": "closed"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "closed"
+
+
 def test_chat_session_rejects_other_users_case(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",

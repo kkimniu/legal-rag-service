@@ -29,6 +29,12 @@ class LegalCaseRead(BaseModel):
     chat_count: int = 0
 
 
+class LegalCaseUpdate(BaseModel):
+    """Payload for updating a personal legal matter."""
+
+    status: CaseStatus
+
+
 class CaseNoteCreate(BaseModel):
     """Payload for creating a note under one legal matter."""
 

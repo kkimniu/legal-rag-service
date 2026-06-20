@@ -13,6 +13,8 @@ export type LegalCase = {
   chat_count: number;
 };
 
+export type CaseStatus = 'active' | 'watching' | 'closed';
+
 export type CaseNote = {
   id: number;
   case_id: number;
@@ -40,6 +42,19 @@ export async function createCase(title: string, domainCode?: string): Promise<Le
     const response = await api.post<LegalCase>(
       '/cases',
       { title, domain_code: domainCode || null },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateCaseStatus(caseId: number, status: CaseStatus): Promise<LegalCase | null> {
+  try {
+    const response = await api.patch<LegalCase>(
+      `/cases/${caseId}`,
+      { status },
       { headers: await getAuthHeaders() },
     );
     return response.data;

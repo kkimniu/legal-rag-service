@@ -1,6 +1,15 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
-import { createCase, createCaseNote, fetchCaseNotes, fetchCases, type CaseNote, type LegalCase } from './api/cases';
+import {
+  createCase,
+  createCaseNote,
+  fetchCaseNotes,
+  fetchCases,
+  updateCaseStatus,
+  type CaseNote,
+  type CaseStatus,
+  type LegalCase,
+} from './api/cases';
 import {
   createChatSession,
   deleteChatSession,
@@ -28,8 +37,18 @@ const answerModeOptions = [
   { value: 'consultation', label: '상담 준비' },
 ];
 
+const caseStatusOptions: { value: CaseStatus; label: string }[] = [
+  { value: 'active', label: '진행중' },
+  { value: 'watching', label: '관찰중' },
+  { value: 'closed', label: '종료' },
+];
+
 function domainLabel(domainCode?: string | null) {
   return domainOptions.find((option) => option.value === (domainCode ?? ''))?.label ?? '전체 분야';
+}
+
+function caseStatusLabel(status?: string | null) {
+  return caseStatusOptions.find((option) => option.value === status)?.label ?? '진행중';
 }
 
 function answerModeLabel(answerMode?: string | null) {
@@ -207,6 +226,18 @@ export function App() {
     setMessages([]);
     setFilterSessionsByCase(true);
     setChatStatus(`${activeCase.title} 사건에 연결된 새 대화입니다. 첫 메시지를 보내면 대화가 저장됩니다.`);
+  }
+
+  async function handleUpdateCaseStatus(status: CaseStatus) {
+    if (!activeCase) return;
+    const updatedCase = await updateCaseStatus(activeCase.id, status);
+    if (!updatedCase) {
+      setChatStatus('사건 상태를 변경하지 못했습니다.');
+      return;
+    }
+    setActiveCase(updatedCase);
+    setCases((items) => items.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
+    setChatStatus(`사건 상태를 ${caseStatusLabel(updatedCase.status)} 상태로 변경했습니다.`);
   }
 
   async function handleSelectCase(legalCase: LegalCase) {
@@ -430,7 +461,7 @@ export function App() {
                     >
                       <span>{legalCase.title}</span>
                       <small>
-                        {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
+                        {caseStatusLabel(legalCase.status)} · {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
                       </small>
                     </button>
                   ))}
@@ -453,7 +484,20 @@ export function App() {
                     </div>
                     <div>
                       <dt>상태</dt>
-                      <dd>{activeCase.status}</dd>
+                      <dd>
+                        <select
+                          className="case-status-select"
+                          aria-label="사건 상태"
+                          value={activeCase.status}
+                          onChange={(event) => handleUpdateCaseStatus(event.target.value as CaseStatus)}
+                        >
+                          {caseStatusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </dd>
                     </div>
                     <div>
                       <dt>연결 대화</dt>

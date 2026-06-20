@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
-import { createCase, createCaseNote, fetchCaseNotes, fetchCases } from './api/cases';
+import { createCase, createCaseNote, fetchCaseNotes, fetchCases, updateCaseStatus } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -27,6 +27,7 @@ vi.mock('./api/cases', () => ({
   createCaseNote: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
+  updateCaseStatus: vi.fn(),
 }));
 
 const mockedFetchCurrentUser = vi.mocked(fetchCurrentUser);
@@ -41,6 +42,7 @@ const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
+const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 
 describe('App', () => {
   beforeEach(() => {
@@ -50,6 +52,7 @@ describe('App', () => {
     mockedFetchChatMessages.mockResolvedValue([]);
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
+    mockedUpdateCaseStatus.mockResolvedValue(null);
   });
 
   it('renders chatbot shell and disabled message box before login', async () => {
@@ -274,6 +277,17 @@ describe('App', () => {
         updated_at: '2026-06-14T12:00:00',
       },
     ]);
+    mockedUpdateCaseStatus.mockResolvedValue({
+      id: 1,
+      title: '임대차 사건',
+      summary: '',
+      status: 'closed',
+      domain_code: '01_civil_law',
+      created_at: '2026-06-14T09:00:00',
+      updated_at: '2026-06-14T13:00:00',
+      note_count: 1,
+      chat_count: 1,
+    });
 
     render(<App />);
 
@@ -282,6 +296,11 @@ describe('App', () => {
     expect(screen.getAllByText('임대차 보증금 반환 가능성을 확인해야 함').length).toBeGreaterThan(0);
     expect(screen.getAllByText('연결 대화').length).toBeGreaterThan(0);
     expect(screen.queryByText('상표권 상담')).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('사건 상태'), 'closed');
+
+    expect(mockedUpdateCaseStatus).toHaveBeenCalledWith(1, 'closed');
+    expect(await screen.findByText(/사건 상태를 종료 상태로 변경했습니다./)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '이 사건 새 대화' }));
 

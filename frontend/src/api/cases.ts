@@ -104,3 +104,25 @@ export async function createCaseNote(caseId: number, title: string, content: str
     return null;
   }
 }
+
+export async function updateCaseNote(caseId: number, noteId: number, title: string, content: string): Promise<CaseNote | null> {
+  try {
+    const response = await api.patch<CaseNote>(
+      `/cases/${caseId}/notes/${noteId}`,
+      { title: title || null, content },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCaseNote(caseId: number, noteId: number): Promise<boolean> {
+  try {
+    await api.delete(`/cases/${caseId}/notes/${noteId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}

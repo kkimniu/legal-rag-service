@@ -475,6 +475,18 @@ button:disabled {
   min-height: 96px;
 }
 
+.case-note-form-actions,
+.case-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.case-note-form-actions button,
+.case-note-actions button {
+  width: auto;
+}
+
 .case-note-list {
   display: grid;
   gap: 8px;
@@ -505,6 +517,17 @@ button:disabled {
 .case-note-item time {
   color: #536174;
   font-size: 12px;
+}
+
+.danger-button {
+  border: 1px solid #f0c7c4;
+  background: #fff4f2;
+  color: #a23c33;
+}
+
+.danger-button:hover {
+  border-color: #d68b84;
+  background: #ffe8e5;
 }
 
 .session-list {

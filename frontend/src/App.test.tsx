@@ -3,7 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
-import { createCase, createCaseNote, fetchCaseNotes, fetchCases, generateCaseInsight, updateCaseStatus } from './api/cases';
+import {
+  createCase,
+  createCaseNote,
+  deleteCaseNote,
+  fetchCaseNotes,
+  fetchCases,
+  generateCaseInsight,
+  updateCaseNote,
+  updateCaseStatus,
+} from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -25,9 +34,11 @@ vi.mock('./api/chat', () => ({
 vi.mock('./api/cases', () => ({
   createCase: vi.fn(),
   createCaseNote: vi.fn(),
+  deleteCaseNote: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
   generateCaseInsight: vi.fn(),
+  updateCaseNote: vi.fn(),
   updateCaseStatus: vi.fn(),
 }));
 
@@ -41,9 +52,11 @@ const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
+const mockedDeleteCaseNote = vi.mocked(deleteCaseNote);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
+const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 
 describe('App', () => {
@@ -55,6 +68,8 @@ describe('App', () => {
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
+    mockedUpdateCaseNote.mockResolvedValue(null);
+    mockedDeleteCaseNote.mockResolvedValue(false);
     mockedUpdateCaseStatus.mockResolvedValue(null);
   });
 
@@ -202,6 +217,15 @@ describe('App', () => {
       created_at: '2026-06-14T12:10:00',
       updated_at: '2026-06-14T12:10:00',
     });
+    mockedUpdateCaseNote.mockResolvedValue({
+      id: 7,
+      case_id: 3,
+      title: '수정 사실',
+      content: '계약 종료 후 일부 보증금을 받지 못함',
+      created_at: '2026-06-14T12:10:00',
+      updated_at: '2026-06-14T12:20:00',
+    });
+    mockedDeleteCaseNote.mockResolvedValue(true);
 
     render(<App />);
 
@@ -218,6 +242,21 @@ describe('App', () => {
 
     expect(mockedCreateCaseNote).toHaveBeenCalledWith(3, '핵심 사실', '계약 종료 후 보증금을 받지 못함');
     expect((await screen.findAllByText('계약 종료 후 보증금을 받지 못함')).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await userEvent.clear(screen.getByLabelText('메모 제목'));
+    await userEvent.type(screen.getByLabelText('메모 제목'), '수정 사실');
+    await userEvent.clear(screen.getByLabelText('메모 내용'));
+    await userEvent.type(screen.getByLabelText('메모 내용'), '계약 종료 후 일부 보증금을 받지 못함');
+    await userEvent.click(screen.getByRole('button', { name: '메모 수정' }));
+
+    expect(mockedUpdateCaseNote).toHaveBeenCalledWith(3, 7, '수정 사실', '계약 종료 후 일부 보증금을 받지 못함');
+    expect((await screen.findAllByText('계약 종료 후 일부 보증금을 받지 못함')).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+
+    expect(mockedDeleteCaseNote).toHaveBeenCalledWith(3, 7);
+    expect(screen.queryByText('계약 종료 후 일부 보증금을 받지 못함')).not.toBeInTheDocument();
   });
 
   it('filters chat sessions by the selected legal case', async () => {

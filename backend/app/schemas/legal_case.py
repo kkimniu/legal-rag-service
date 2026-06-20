@@ -53,6 +53,13 @@ class CaseNoteCreate(BaseModel):
     content: str = Field(..., min_length=1)
 
 
+class CaseNoteUpdate(BaseModel):
+    """Payload for updating a note under one legal matter."""
+
+    title: str | None = Field(default=None, max_length=255)
+    content: str = Field(..., min_length=1)
+
+
 class CaseNoteRead(BaseModel):
     """Stored note under one legal matter."""
 

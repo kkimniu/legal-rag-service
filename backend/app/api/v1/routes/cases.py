@@ -9,6 +9,7 @@ from app.schemas.legal_case import (
     CaseInsightRead,
     CaseNoteCreate,
     CaseNoteRead,
+    CaseNoteUpdate,
     LegalCaseCreate,
     LegalCaseRead,
     LegalCaseUpdate,
@@ -18,10 +19,13 @@ from app.services.legal_case_service import (
     count_case_notes,
     create_case_note,
     create_legal_case,
+    delete_case_note,
     generate_case_insight,
+    get_case_note,
     get_legal_case,
     list_case_notes,
     list_legal_cases,
+    update_case_note,
     update_legal_case_status,
 )
 
@@ -132,3 +136,38 @@ def create_note(
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
     return note_read(create_case_note(db, legal_case, payload.title, payload.content))
+
+
+@router.patch("/{case_id}/notes/{note_id}", response_model=CaseNoteRead)
+def update_note(
+    case_id: int,
+    note_id: int,
+    payload: CaseNoteUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseNoteRead:
+    """Update one note under an owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    note = get_case_note(db, legal_case.id, note_id)
+    if note is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case note was not found.")
+    return note_read(update_case_note(db, legal_case, note, payload.title, payload.content))
+
+
+@router.delete("/{case_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_note(
+    case_id: int,
+    note_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete one note under an owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    note = get_case_note(db, legal_case.id, note_id)
+    if note is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case note was not found.")
+    delete_case_note(db, legal_case, note)

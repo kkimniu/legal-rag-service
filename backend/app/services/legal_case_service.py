@@ -130,6 +130,44 @@ def create_case_note(
     return note
 
 
+def get_case_note(db: Session, case_id: int, note_id: int) -> CaseNote | None:
+    """Return one note only if it belongs to the given legal matter."""
+    statement = select(CaseNote).where(
+        CaseNote.id == note_id,
+        CaseNote.case_id == case_id,
+    )
+    return db.scalar(statement)
+
+
+def update_case_note(
+    db: Session,
+    legal_case: LegalCase,
+    note: CaseNote,
+    title: str | None,
+    content: str,
+) -> CaseNote:
+    """Update an existing note under an owned legal matter."""
+    note.title = (title or "메모").strip() or "메모"
+    note.content = content.strip()
+    note.updated_at = datetime.now(UTC)
+    legal_case.updated_at = note.updated_at
+    db.add(note)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(note)
+    db.refresh(legal_case)
+    return note
+
+
+def delete_case_note(db: Session, legal_case: LegalCase, note: CaseNote) -> None:
+    """Delete one note under an owned legal matter."""
+    legal_case.updated_at = datetime.now(UTC)
+    db.delete(note)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(legal_case)
+
+
 def list_case_notes(db: Session, case_id: int, limit: int = 100) -> list[CaseNote]:
     """Return notes for one legal matter in chronological order."""
     statement = (

@@ -133,6 +133,47 @@ def test_case_api_generates_case_insight_without_openai_key(client: TestClient, 
     assert cases_response.json()[0]["summary"] == response.json()["summary"]
 
 
+def test_case_api_updates_and_deletes_case_note(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-note-edit@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-note-edit@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Editable note case", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    note_response = client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/notes",
+        json={"title": "초안", "content": "처음 작성한 메모"},
+        headers=headers,
+    )
+
+    update_response = client.patch(
+        f"/api/v1/cases/{case_response.json()['id']}/notes/{note_response.json()['id']}",
+        json={"title": "수정본", "content": "수정한 메모"},
+        headers=headers,
+    )
+    delete_response = client.delete(
+        f"/api/v1/cases/{case_response.json()['id']}/notes/{note_response.json()['id']}",
+        headers=headers,
+    )
+    notes_response = client.get(f"/api/v1/cases/{case_response.json()['id']}/notes", headers=headers)
+    cases_response = client.get("/api/v1/cases", headers=headers)
+
+    assert update_response.status_code == 200
+    assert update_response.json()["title"] == "수정본"
+    assert update_response.json()["content"] == "수정한 메모"
+    assert delete_response.status_code == 204
+    assert notes_response.json() == []
+    assert cases_response.json()[0]["note_count"] == 0
+
+
 def test_chat_session_rejects_other_users_case(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",

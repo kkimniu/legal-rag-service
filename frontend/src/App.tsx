@@ -3,10 +3,12 @@ import { clearStoredToken, fetchCurrentUser, login, register, type User } from '
 import {
   createCase,
   createCaseNote,
+  deleteCaseNote,
   fetchCaseNotes,
   fetchCases,
   generateCaseInsight,
   updateCaseStatus,
+  updateCaseNote,
   type CaseInsight,
   type CaseNote,
   type CaseStatus,
@@ -101,6 +103,7 @@ export function App() {
   const [isGeneratingCaseInsight, setIsGeneratingCaseInsight] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
@@ -220,6 +223,7 @@ export function App() {
     setCaseInsight(null);
     setNoteTitle('');
     setNoteContent('');
+    setEditingNoteId(null);
     setActiveSession(null);
     setMessages([]);
     setAuthMessage('로그아웃되었습니다.');
@@ -279,6 +283,9 @@ export function App() {
   async function handleSelectCase(legalCase: LegalCase) {
     setActiveCase(legalCase);
     setCaseInsight(null);
+    setEditingNoteId(null);
+    setNoteTitle('');
+    setNoteContent('');
     setFilterSessionsByCase(true);
     setCaseNotes(await fetchCaseNotes(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
@@ -328,6 +335,7 @@ export function App() {
     setCases((items) => [legalCase, ...items]);
     setActiveCase(legalCase);
     setCaseInsight(null);
+    setEditingNoteId(null);
     setFilterSessionsByCase(true);
     setCaseNotes([]);
     setCaseTitle('');
@@ -337,23 +345,75 @@ export function App() {
   async function handleCreateCaseNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeCase || !noteContent.trim()) return;
-    const note = await createCaseNote(activeCase.id, noteTitle.trim(), noteContent.trim());
+    const note = editingNoteId
+      ? await updateCaseNote(activeCase.id, editingNoteId, noteTitle.trim(), noteContent.trim())
+      : await createCaseNote(activeCase.id, noteTitle.trim(), noteContent.trim());
     if (!note) {
-      setChatStatus('사건 메모를 저장하지 못했습니다.');
+      setChatStatus(editingNoteId ? '사건 메모를 수정하지 못했습니다.' : '사건 메모를 저장하지 못했습니다.');
       return;
     }
-    setCaseNotes((items) => [...items, note]);
+    setCaseNotes((items) => (editingNoteId ? items.map((item) => (item.id === note.id ? note : item)) : [...items, note]));
+    const noteCountDelta = editingNoteId ? 0 : 1;
     setCases((items) =>
       items.map((item) =>
-        item.id === activeCase.id ? { ...item, note_count: item.note_count + 1, updated_at: note.updated_at } : item,
+        item.id === activeCase.id
+          ? { ...item, note_count: item.note_count + noteCountDelta, updated_at: note.updated_at }
+          : item,
       ),
     );
     setActiveCase((item) =>
-      item && item.id === activeCase.id ? { ...item, note_count: item.note_count + 1, updated_at: note.updated_at } : item,
+      item && item.id === activeCase.id
+        ? { ...item, note_count: item.note_count + noteCountDelta, updated_at: note.updated_at }
+        : item,
     );
     setNoteTitle('');
     setNoteContent('');
-    setChatStatus('사건 메모를 저장했습니다.');
+    setEditingNoteId(null);
+    setCaseInsight(null);
+    setChatStatus(editingNoteId ? '사건 메모를 수정했습니다.' : '사건 메모를 저장했습니다.');
+  }
+
+  function handleEditCaseNote(note: CaseNote) {
+    setEditingNoteId(note.id);
+    setNoteTitle(note.title);
+    setNoteContent(note.content);
+    setChatStatus('메모를 편집 중입니다.');
+  }
+
+  function handleCancelNoteEdit() {
+    setEditingNoteId(null);
+    setNoteTitle('');
+    setNoteContent('');
+    setChatStatus('메모 편집을 취소했습니다.');
+  }
+
+  async function handleDeleteCaseNote(note: CaseNote) {
+    if (!activeCase) return;
+    const deleted = await deleteCaseNote(activeCase.id, note.id);
+    if (!deleted) {
+      setChatStatus('사건 메모를 삭제하지 못했습니다.');
+      return;
+    }
+    setCaseNotes((items) => items.filter((item) => item.id !== note.id));
+    setCases((items) =>
+      items.map((item) =>
+        item.id === activeCase.id
+          ? { ...item, note_count: Math.max(0, item.note_count - 1), updated_at: new Date().toISOString() }
+          : item,
+      ),
+    );
+    setActiveCase((item) =>
+      item && item.id === activeCase.id
+        ? { ...item, note_count: Math.max(0, item.note_count - 1), updated_at: new Date().toISOString() }
+        : item,
+    );
+    if (editingNoteId === note.id) {
+      setEditingNoteId(null);
+      setNoteTitle('');
+      setNoteContent('');
+    }
+    setCaseInsight(null);
+    setChatStatus('사건 메모를 삭제했습니다.');
   }
 
   async function handleRegenerate() {
@@ -663,7 +723,14 @@ export function App() {
                       placeholder="사실관계, 쟁점, 확인할 자료를 적어두세요."
                       rows={4}
                     />
-                    <button type="submit">메모 저장</button>
+                    <div className="case-note-form-actions">
+                      <button type="submit">{editingNoteId ? '메모 수정' : '메모 저장'}</button>
+                      {editingNoteId && (
+                        <button type="button" className="secondary-button" onClick={handleCancelNoteEdit}>
+                          취소
+                        </button>
+                      )}
+                    </div>
                   </form>
                   {caseNotes.length > 0 ? (
                     <div className="case-note-list">
@@ -672,6 +739,14 @@ export function App() {
                           <strong>{note.title}</strong>
                           <p>{note.content}</p>
                           <time>{new Date(note.updated_at).toLocaleString('ko-KR')}</time>
+                          <div className="case-note-actions">
+                            <button type="button" className="secondary-button" onClick={() => handleEditCaseNote(note)}>
+                              수정
+                            </button>
+                            <button type="button" className="danger-button" onClick={() => handleDeleteCaseNote(note)}>
+                              삭제
+                            </button>
+                          </div>
                         </article>
                       ))}
                     </div>

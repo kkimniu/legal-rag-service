@@ -92,6 +92,9 @@ export function App() {
   const [activeCase, setActiveCase] = useState<LegalCase | null>(null);
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
+  const [caseSearch, setCaseSearch] = useState('');
+  const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
+  const [hideClosedCases, setHideClosedCases] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -105,6 +108,16 @@ export function App() {
     const query = sessionSearch.trim().toLowerCase();
     if (!query) return true;
     return [session.title, domainLabel(session.domain_code), session.last_message_preview ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(query);
+  });
+  const filteredCases = cases.filter((legalCase) => {
+    if (caseStatusFilter !== 'all' && legalCase.status !== caseStatusFilter) return false;
+    if (caseStatusFilter === 'all' && hideClosedCases && legalCase.status === 'closed') return false;
+    const query = caseSearch.trim().toLowerCase();
+    if (!query) return true;
+    return [legalCase.title, legalCase.summary, caseStatusLabel(legalCase.status), domainLabel(legalCase.domain_code)]
       .join(' ')
       .toLowerCase()
       .includes(query);
@@ -450,9 +463,47 @@ export function App() {
                 />
                 <button type="submit">사건 만들기</button>
               </form>
+              {cases.length > 0 && (
+                <div className="case-filter-panel">
+                  <label className="case-search" htmlFor="case-search">
+                    <span>사건 검색</span>
+                    <input
+                      id="case-search"
+                      type="search"
+                      value={caseSearch}
+                      onChange={(event) => setCaseSearch(event.target.value)}
+                      placeholder="사건명, 분야, 상태"
+                    />
+                  </label>
+                  <label className="case-status-filter" htmlFor="case-status-filter">
+                    <span>상태 필터</span>
+                    <select
+                      id="case-status-filter"
+                      value={caseStatusFilter}
+                      onChange={(event) => setCaseStatusFilter(event.target.value as 'all' | CaseStatus)}
+                    >
+                      <option value="all">전체 상태</option>
+                      {caseStatusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="case-filter-toggle">
+                    <input
+                      type="checkbox"
+                      checked={hideClosedCases}
+                      onChange={(event) => setHideClosedCases(event.target.checked)}
+                      disabled={caseStatusFilter === 'closed'}
+                    />
+                    <span>종료 사건 숨기기</span>
+                  </label>
+                </div>
+              )}
               {cases.length > 0 ? (
                 <div className="case-list">
-                  {cases.map((legalCase) => (
+                  {filteredCases.map((legalCase) => (
                     <button
                       type="button"
                       className={activeCase?.id === legalCase.id ? 'case-item active-case' : 'case-item'}
@@ -465,6 +516,9 @@ export function App() {
                       </small>
                     </button>
                   ))}
+                  {filteredCases.length === 0 && (
+                    <p className="empty-state">조건에 맞는 사건이 없습니다.</p>
+                  )}
                 </div>
               ) : (
                 <p className="empty-state">아직 사건 노트가 없습니다.</p>

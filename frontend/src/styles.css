@@ -223,6 +223,33 @@ button:disabled {
   gap: 8px;
 }
 
+.case-filter-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.case-search,
+.case-status-filter {
+  display: grid;
+  gap: 6px;
+}
+
+.case-search span,
+.case-status-filter span {
+  color: #536174;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.case-search input,
+.case-status-filter select {
+  min-height: 38px;
+}
+
 .case-list {
   display: grid;
   gap: 8px;

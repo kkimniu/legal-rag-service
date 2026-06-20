@@ -311,6 +311,68 @@ describe('App', () => {
     expect(await screen.findByText('상표권 상담')).toBeInTheDocument();
   });
 
+  it('filters legal cases by search text and status', async () => {
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'user@example.com', is_active: true });
+    mockedFetchCases.mockResolvedValue([
+      {
+        id: 1,
+        title: '임대차 진행 사건',
+        summary: '',
+        status: 'active',
+        domain_code: '01_civil_law',
+        created_at: '2026-06-14T09:00:00',
+        updated_at: '2026-06-14T09:00:00',
+        note_count: 0,
+        chat_count: 0,
+      },
+      {
+        id: 2,
+        title: '상표 관찰 사건',
+        summary: '',
+        status: 'watching',
+        domain_code: '02_intellectual_property_law',
+        created_at: '2026-06-14T09:10:00',
+        updated_at: '2026-06-14T09:10:00',
+        note_count: 0,
+        chat_count: 0,
+      },
+      {
+        id: 3,
+        title: '종료된 형사 사건',
+        summary: '',
+        status: 'closed',
+        domain_code: '04_criminal_law',
+        created_at: '2026-06-14T09:20:00',
+        updated_at: '2026-06-14T09:20:00',
+        note_count: 0,
+        chat_count: 0,
+      },
+    ]);
+
+    render(<App />);
+
+    expect((await screen.findAllByText('임대차 진행 사건')).length).toBeGreaterThan(0);
+    expect(screen.getByText('상표 관찰 사건')).toBeInTheDocument();
+    expect(screen.getByText('종료된 형사 사건')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('사건 검색'), '상표');
+
+    expect(screen.queryByText('종료된 형사 사건')).not.toBeInTheDocument();
+    expect(screen.getByText('상표 관찰 사건')).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText('사건 검색'));
+    await userEvent.selectOptions(screen.getByLabelText('상태 필터'), 'closed');
+
+    expect(screen.getByText('종료된 형사 사건')).toBeInTheDocument();
+    expect(screen.queryByText('상표 관찰 사건')).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('상태 필터'), 'all');
+    await userEvent.click(screen.getByLabelText('종료 사건 숨기기'));
+
+    expect(screen.queryByText('종료된 형사 사건')).not.toBeInTheDocument();
+    expect(screen.getByText('상표 관찰 사건')).toBeInTheDocument();
+  });
+
   it('filters and pins chat sessions', async () => {
     const sessions = [
       {

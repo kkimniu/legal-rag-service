@@ -211,7 +211,7 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: '메모 저장' }));
 
     expect(mockedCreateCaseNote).toHaveBeenCalledWith(3, '핵심 사실', '계약 종료 후 보증금을 받지 못함');
-    expect(await screen.findByText('계약 종료 후 보증금을 받지 못함')).toBeInTheDocument();
+    expect((await screen.findAllByText('계약 종료 후 보증금을 받지 못함')).length).toBeGreaterThan(0);
   });
 
   it('filters chat sessions by the selected legal case', async () => {
@@ -264,11 +264,28 @@ describe('App', () => {
         last_message_preview: '상표 침해 검토',
       },
     ]);
+    mockedFetchCaseNotes.mockResolvedValue([
+      {
+        id: 3,
+        case_id: 1,
+        title: '최근 쟁점',
+        content: '임대차 보증금 반환 가능성을 확인해야 함',
+        created_at: '2026-06-14T12:00:00',
+        updated_at: '2026-06-14T12:00:00',
+      },
+    ]);
 
     render(<App />);
 
     expect((await screen.findAllByText('임대차 상담')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('최근 쟁점').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('임대차 보증금 반환 가능성을 확인해야 함').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('연결 대화').length).toBeGreaterThan(0);
     expect(screen.queryByText('상표권 상담')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '이 사건 새 대화' }));
+
+    expect(screen.getByRole('heading', { name: '새 채팅' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText('선택한 사건 대화만 보기'));
 

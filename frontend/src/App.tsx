@@ -90,6 +90,16 @@ export function App() {
       .toLowerCase()
       .includes(query);
   });
+  const activeCaseSessions = activeCase ? sessions.filter((session) => session.case_id === activeCase.id) : [];
+  const recentCaseNote = caseNotes.reduce<CaseNote | null>((latest, note) => {
+    if (!latest) return note;
+    return new Date(note.updated_at).getTime() > new Date(latest.updated_at).getTime() ? note : latest;
+  }, null);
+  const activeCaseActivityAt = activeCase
+    ? [activeCase.updated_at, ...activeCaseSessions.map((session) => session.updated_at), ...caseNotes.map((note) => note.updated_at)]
+        .filter(Boolean)
+        .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+    : null;
 
   function toggleSource(key: string) {
     setExpandedSources((prev) => {
@@ -189,6 +199,14 @@ export function App() {
     setActiveSession(session);
     setMessages(await fetchChatMessages(session.id));
     setChatStatus('대화 이력을 불러왔습니다.');
+  }
+
+  function handleStartCaseChat() {
+    if (!activeCase) return;
+    setActiveSession(null);
+    setMessages([]);
+    setFilterSessionsByCase(true);
+    setChatStatus(`${activeCase.title} 사건에 연결된 새 대화입니다. 첫 메시지를 보내면 대화가 저장됩니다.`);
   }
 
   async function handleSelectCase(legalCase: LegalCase) {
@@ -422,7 +440,57 @@ export function App() {
               )}
               {activeCase && (
                 <section className="case-detail">
-                  <h3>{activeCase.title}</h3>
+                  <div className="case-detail-heading">
+                    <h3>{activeCase.title}</h3>
+                    <button type="button" className="secondary-button" onClick={handleStartCaseChat}>
+                      이 사건 새 대화
+                    </button>
+                  </div>
+                  <dl className="case-overview">
+                    <div>
+                      <dt>분야</dt>
+                      <dd>{domainLabel(activeCase.domain_code)}</dd>
+                    </div>
+                    <div>
+                      <dt>상태</dt>
+                      <dd>{activeCase.status}</dd>
+                    </div>
+                    <div>
+                      <dt>연결 대화</dt>
+                      <dd>{activeCaseSessions.length}개</dd>
+                    </div>
+                    <div>
+                      <dt>메모</dt>
+                      <dd>{caseNotes.length}개</dd>
+                    </div>
+                    <div className="case-overview-wide">
+                      <dt>최근 활동</dt>
+                      <dd>{activeCaseActivityAt ? new Date(activeCaseActivityAt).toLocaleString('ko-KR') : '-'}</dd>
+                    </div>
+                  </dl>
+                  {activeCase.summary && <p className="case-summary">{activeCase.summary}</p>}
+                  <section className="case-linked-sessions">
+                    <h4>연결 대화</h4>
+                    {activeCaseSessions.length > 0 ? (
+                      <div className="case-linked-session-list">
+                        {activeCaseSessions.slice(0, 3).map((session) => (
+                          <button type="button" key={session.id} onClick={() => handleSelectSession(session)}>
+                            <span>{session.title}</span>
+                            <small>{new Date(session.updated_at).toLocaleString('ko-KR')}</small>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-state">이 사건에 연결된 대화가 없습니다.</p>
+                    )}
+                  </section>
+                  {recentCaseNote && (
+                    <section className="case-recent-note">
+                      <h4>최근 메모</h4>
+                      <strong>{recentCaseNote.title}</strong>
+                      <p>{recentCaseNote.content}</p>
+                    </section>
+                  )}
                   <form className="case-note-form" onSubmit={handleCreateCaseNote}>
                     <label htmlFor="note-title">메모 제목</label>
                     <input

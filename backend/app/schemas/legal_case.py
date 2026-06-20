@@ -29,6 +29,17 @@ class LegalCaseRead(BaseModel):
     chat_count: int = 0
 
 
+class CaseInsightRead(BaseModel):
+    """AI-generated personal legal matter summary."""
+
+    case_id: int
+    summary: str
+    issues: list[str] = []
+    next_actions: list[str] = []
+    cautions: list[str] = []
+    is_ready: bool = True
+
+
 class LegalCaseUpdate(BaseModel):
     """Payload for updating a personal legal matter."""
 

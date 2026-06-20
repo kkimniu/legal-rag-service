@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
+import json
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -62,6 +65,48 @@ def update_legal_case_status(
     db.commit()
     db.refresh(legal_case)
     return legal_case
+
+
+def generate_case_insight(db: Session, legal_case: LegalCase) -> dict[str, object]:
+    """Generate and persist a compact AI summary for one owned legal matter."""
+    notes = list_case_notes(db, legal_case.id, limit=30)
+    context = build_case_context(db, legal_case)
+    insight = _fallback_case_insight(legal_case, notes)
+
+    if settings.openai_api_key and not settings.openai_api_key.startswith("replace-") and context.strip():
+        try:
+            model = ChatOpenAI(
+                model=settings.openai_model,
+                api_key=settings.openai_api_key,
+                temperature=settings.openai_temperature,
+            )
+            response = model.invoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "당신은 개인용 한국 법률 비서입니다. 사용자가 저장한 사건 메모만 근거로 "
+                            "사건 요약, 핵심 쟁점, 다음 확인할 일을 간결하게 정리하세요. "
+                            "법률 자문처럼 단정하지 말고 참고용 정리임을 유지하세요. "
+                            "반드시 JSON 객체로만 답하세요. 키는 summary, issues, next_actions, cautions 입니다."
+                        )
+                    ),
+                    HumanMessage(content=f"사건 메모:\n{context}"),
+                ]
+            )
+            parsed = json.loads(str(response.content))
+            insight = _normalize_case_insight(parsed, insight)
+        except Exception:
+            insight = {**insight, "is_ready": False}
+
+    summary = str(insight.get("summary") or "").strip()
+    if summary:
+        legal_case.summary = summary[:2000]
+        legal_case.updated_at = datetime.now(UTC)
+        db.add(legal_case)
+        db.commit()
+        db.refresh(legal_case)
+
+    return insight
 
 
 def create_case_note(
@@ -127,3 +172,48 @@ def build_case_context(db: Session, legal_case: LegalCase) -> str:
 
     context = "\n\n".join(parts)
     return context[: settings.rag_case_context_max_chars]
+
+
+def _fallback_case_insight(legal_case: LegalCase, notes: list[CaseNote]) -> dict[str, object]:
+    """Build a useful local summary when the AI provider is unavailable."""
+    note_texts = [note.content.strip() for note in notes if note.content.strip()]
+    summary_source = note_texts[0] if note_texts else legal_case.summary or legal_case.title
+    summary = f"{legal_case.title}: {summary_source[:220]}"
+    issues = [note.title for note in notes[:3] if note.title.strip()]
+    if not issues:
+        issues = ["사실관계와 적용 가능한 법률 쟁점 확인"]
+
+    return {
+        "case_id": legal_case.id,
+        "summary": summary,
+        "issues": issues[:5],
+        "next_actions": [
+            "관련 계약서, 통지 내역, 증빙 자료를 정리하세요.",
+            "상대방 주장과 본인 주장을 구분해 메모를 보강하세요.",
+        ],
+        "cautions": ["자동 정리는 저장된 메모 기반 참고 정보이며, 구체적 판단은 전문가 검토가 필요합니다."],
+        "is_ready": bool(settings.openai_api_key and not str(settings.openai_api_key).startswith("replace-")),
+    }
+
+
+def _normalize_case_insight(parsed: object, fallback: dict[str, object]) -> dict[str, object]:
+    if not isinstance(parsed, dict):
+        return fallback
+
+    def list_of_strings(key: str) -> list[str]:
+        value = parsed.get(key)
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()][:5]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return list(fallback.get(key, []))
+
+    summary = str(parsed.get("summary") or fallback.get("summary") or "").strip()
+    return {
+        "case_id": fallback["case_id"],
+        "summary": summary,
+        "issues": list_of_strings("issues"),
+        "next_actions": list_of_strings("next_actions"),
+        "cautions": list_of_strings("cautions"),
+        "is_ready": True,
+    }

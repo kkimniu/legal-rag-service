@@ -5,7 +5,9 @@ import {
   createCaseNote,
   fetchCaseNotes,
   fetchCases,
+  generateCaseInsight,
   updateCaseStatus,
+  type CaseInsight,
   type CaseNote,
   type CaseStatus,
   type LegalCase,
@@ -95,6 +97,8 @@ export function App() {
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
   const [hideClosedCases, setHideClosedCases] = useState(false);
+  const [caseInsight, setCaseInsight] = useState<CaseInsight | null>(null);
+  const [isGeneratingCaseInsight, setIsGeneratingCaseInsight] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -192,6 +196,7 @@ export function App() {
       const nextSessions = await fetchChatSessions();
       setCases(nextCases);
       setActiveCase(nextCases[0] ?? null);
+      setCaseInsight(null);
       setCaseNotes(nextCases[0] ? await fetchCaseNotes(nextCases[0].id) : []);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
@@ -212,6 +217,7 @@ export function App() {
     setCases([]);
     setActiveCase(null);
     setCaseNotes([]);
+    setCaseInsight(null);
     setNoteTitle('');
     setNoteContent('');
     setActiveSession(null);
@@ -241,6 +247,23 @@ export function App() {
     setChatStatus(`${activeCase.title} 사건에 연결된 새 대화입니다. 첫 메시지를 보내면 대화가 저장됩니다.`);
   }
 
+  async function handleGenerateCaseInsight() {
+    if (!activeCase || isGeneratingCaseInsight) return;
+    setIsGeneratingCaseInsight(true);
+    setChatStatus('사건 정리를 생성하고 있습니다.');
+    const insight = await generateCaseInsight(activeCase.id);
+    setIsGeneratingCaseInsight(false);
+    if (!insight) {
+      setChatStatus('사건 정리를 생성하지 못했습니다.');
+      return;
+    }
+    setCaseInsight(insight);
+    const updatedCase = { ...activeCase, summary: insight.summary };
+    setActiveCase(updatedCase);
+    setCases((items) => items.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
+    setChatStatus(insight.is_ready ? 'AI 사건 정리를 생성했습니다.' : '기본 사건 정리를 생성했습니다. OpenAI 설정을 확인하면 더 정교하게 정리됩니다.');
+  }
+
   async function handleUpdateCaseStatus(status: CaseStatus) {
     if (!activeCase) return;
     const updatedCase = await updateCaseStatus(activeCase.id, status);
@@ -255,6 +278,7 @@ export function App() {
 
   async function handleSelectCase(legalCase: LegalCase) {
     setActiveCase(legalCase);
+    setCaseInsight(null);
     setFilterSessionsByCase(true);
     setCaseNotes(await fetchCaseNotes(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
@@ -303,6 +327,7 @@ export function App() {
     }
     setCases((items) => [legalCase, ...items]);
     setActiveCase(legalCase);
+    setCaseInsight(null);
     setFilterSessionsByCase(true);
     setCaseNotes([]);
     setCaseTitle('');
@@ -448,6 +473,7 @@ export function App() {
                 <button type="button" className="secondary-button" onClick={() => {
                   setActiveCase(null);
                   setCaseNotes([]);
+                  setCaseInsight(null);
                   setFilterSessionsByCase(true);
                 }}>
                   선택 해제
@@ -527,9 +553,14 @@ export function App() {
                 <section className="case-detail">
                   <div className="case-detail-heading">
                     <h3>{activeCase.title}</h3>
-                    <button type="button" className="secondary-button" onClick={handleStartCaseChat}>
-                      이 사건 새 대화
-                    </button>
+                    <div className="case-detail-actions">
+                      <button type="button" className="secondary-button" onClick={handleGenerateCaseInsight} disabled={isGeneratingCaseInsight}>
+                        {isGeneratingCaseInsight ? '정리 중' : 'AI 사건 정리'}
+                      </button>
+                      <button type="button" className="secondary-button" onClick={handleStartCaseChat}>
+                        이 사건 새 대화
+                      </button>
+                    </div>
                   </div>
                   <dl className="case-overview">
                     <div>
@@ -567,6 +598,33 @@ export function App() {
                     </div>
                   </dl>
                   {activeCase.summary && <p className="case-summary">{activeCase.summary}</p>}
+                  {caseInsight && (
+                    <section className="case-insight">
+                      <h4>AI 사건 정리</h4>
+                      <p>{caseInsight.summary}</p>
+                      <div className="case-insight-grid">
+                        <div>
+                          <strong>핵심 쟁점</strong>
+                          <ul>
+                            {caseInsight.issues.map((issue) => (
+                              <li key={issue}>{issue}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <strong>다음 할 일</strong>
+                          <ul>
+                            {caseInsight.next_actions.map((action) => (
+                              <li key={action}>{action}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      {caseInsight.cautions.length > 0 && (
+                        <small>{caseInsight.cautions.join(' ')}</small>
+                      )}
+                    </section>
+                  )}
                   <section className="case-linked-sessions">
                     <h4>연결 대화</h4>
                     {activeCaseSessions.length > 0 ? (

@@ -297,6 +297,17 @@ button:disabled {
   gap: 10px;
 }
 
+.case-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.case-detail-actions button {
+  width: auto;
+}
+
 .case-detail h3 {
   margin: 0;
   color: #172033;
@@ -354,6 +365,48 @@ button:disabled {
   color: #2d3848;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.case-insight {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
+.case-insight h4,
+.case-insight p {
+  margin: 0;
+}
+
+.case-insight h4 {
+  color: #172033;
+  font-size: 13px;
+}
+
+.case-insight p,
+.case-insight li,
+.case-insight small {
+  color: #2d3848;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.case-insight-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.case-insight-grid strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.case-insight-grid ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
 }
 
 .case-linked-sessions,

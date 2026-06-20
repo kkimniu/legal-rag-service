@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
-import { createCase, createCaseNote, fetchCaseNotes, fetchCases, updateCaseStatus } from './api/cases';
+import { createCase, createCaseNote, fetchCaseNotes, fetchCases, generateCaseInsight, updateCaseStatus } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -27,6 +27,7 @@ vi.mock('./api/cases', () => ({
   createCaseNote: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
+  generateCaseInsight: vi.fn(),
   updateCaseStatus: vi.fn(),
 }));
 
@@ -42,6 +43,7 @@ const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
+const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 
 describe('App', () => {
@@ -52,6 +54,7 @@ describe('App', () => {
     mockedFetchChatMessages.mockResolvedValue([]);
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
+    mockedGenerateCaseInsight.mockResolvedValue(null);
     mockedUpdateCaseStatus.mockResolvedValue(null);
   });
 
@@ -288,6 +291,14 @@ describe('App', () => {
       note_count: 1,
       chat_count: 1,
     });
+    mockedGenerateCaseInsight.mockResolvedValue({
+      case_id: 1,
+      summary: '임대차 사건은 보증금 반환 여부가 핵심입니다.',
+      issues: ['보증금 반환 요건', '계약 종료 사실'],
+      next_actions: ['계약서와 입금 내역 정리', '해지 통지 자료 확인'],
+      cautions: ['자동 정리는 참고 정보입니다.'],
+      is_ready: true,
+    });
 
     render(<App />);
 
@@ -301,6 +312,13 @@ describe('App', () => {
 
     expect(mockedUpdateCaseStatus).toHaveBeenCalledWith(1, 'closed');
     expect(await screen.findByText(/사건 상태를 종료 상태로 변경했습니다./)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'AI 사건 정리' }));
+
+    expect(mockedGenerateCaseInsight).toHaveBeenCalledWith(1);
+    expect((await screen.findAllByText('임대차 사건은 보증금 반환 여부가 핵심입니다.')).length).toBeGreaterThan(0);
+    expect(screen.getByText('보증금 반환 요건')).toBeInTheDocument();
+    expect(screen.getByText('계약서와 입금 내역 정리')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '이 사건 새 대화' }));
 

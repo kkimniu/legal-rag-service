@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.models.user import User
 from app.services.legal_case_service import (
@@ -97,6 +98,39 @@ def test_case_api_updates_owned_case_status(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "closed"
+
+
+def test_case_api_generates_case_insight_without_openai_key(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-insight@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-insight@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Insight case", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/notes",
+        json={"title": "핵심 사실", "content": "계약 종료 후 보증금을 받지 못함"},
+        headers=headers,
+    )
+
+    response = client.post(f"/api/v1/cases/{case_response.json()['id']}/insight", headers=headers)
+    cases_response = client.get("/api/v1/cases", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["case_id"] == case_response.json()["id"]
+    assert "Insight case" in response.json()["summary"]
+    assert response.json()["issues"]
+    assert response.json()["next_actions"]
+    assert cases_response.json()[0]["summary"] == response.json()["summary"]
 
 
 def test_chat_session_rejects_other_users_case(client: TestClient) -> None:

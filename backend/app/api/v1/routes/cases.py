@@ -5,12 +5,20 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.legal_case import CaseNote, LegalCase
 from app.models.user import User
-from app.schemas.legal_case import CaseNoteCreate, CaseNoteRead, LegalCaseCreate, LegalCaseRead, LegalCaseUpdate
+from app.schemas.legal_case import (
+    CaseInsightRead,
+    CaseNoteCreate,
+    CaseNoteRead,
+    LegalCaseCreate,
+    LegalCaseRead,
+    LegalCaseUpdate,
+)
 from app.services.legal_case_service import (
     count_case_chats,
     count_case_notes,
     create_case_note,
     create_legal_case,
+    generate_case_insight,
     get_legal_case,
     list_case_notes,
     list_legal_cases,
@@ -84,6 +92,19 @@ def update_case(
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
     return case_read(update_legal_case_status(db, legal_case, payload.status), db)
+
+
+@router.post("/{case_id}/insight", response_model=CaseInsightRead)
+def create_case_insight(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseInsightRead:
+    """Generate a compact AI summary for one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return CaseInsightRead(**generate_case_insight(db, legal_case))
 
 
 @router.get("/{case_id}/notes", response_model=list[CaseNoteRead])

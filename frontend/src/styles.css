@@ -203,6 +203,21 @@ button:disabled {
   min-height: 42px;
 }
 
+.case-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #536174;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.case-filter-toggle input {
+  width: auto;
+  min-height: auto;
+  accent-color: #4f6b8a;
+}
+
 .case-form {
   display: grid;
   gap: 8px;
@@ -447,6 +462,11 @@ button:disabled {
   color: #244c73;
   font-size: 12px;
   padding: 3px 8px;
+}
+
+.session-open-button .case-link-badge {
+  background: #eef0ff;
+  color: #3949a3;
 }
 
 .evidence-status-badge {

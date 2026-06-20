@@ -77,10 +77,12 @@ export function App() {
   const [noteContent, setNoteContent] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
+  const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
+    if (activeCase && filterSessionsByCase && session.case_id !== activeCase.id) return false;
     const query = sessionSearch.trim().toLowerCase();
     if (!query) return true;
     return [session.title, domainLabel(session.domain_code), session.last_message_preview ?? '']
@@ -96,6 +98,11 @@ export function App() {
       else next.add(key);
       return next;
     });
+  }
+
+  function caseTitleForSession(caseId?: number | null) {
+    if (!caseId) return null;
+    return cases.find((legalCase) => legalCase.id === caseId)?.title ?? null;
   }
 
   useEffect(() => {
@@ -186,6 +193,7 @@ export function App() {
 
   async function handleSelectCase(legalCase: LegalCase) {
     setActiveCase(legalCase);
+    setFilterSessionsByCase(true);
     setCaseNotes(await fetchCaseNotes(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
@@ -233,6 +241,7 @@ export function App() {
     }
     setCases((items) => [legalCase, ...items]);
     setActiveCase(legalCase);
+    setFilterSessionsByCase(true);
     setCaseNotes([]);
     setCaseTitle('');
     setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
@@ -377,6 +386,7 @@ export function App() {
                 <button type="button" className="secondary-button" onClick={() => {
                   setActiveCase(null);
                   setCaseNotes([]);
+                  setFilterSessionsByCase(true);
                 }}>
                   선택 해제
                 </button>
@@ -465,6 +475,16 @@ export function App() {
                   placeholder="제목, 분야, 최근 메시지"
                 />
               </label>
+              {activeCase && (
+                <label className="case-filter-toggle">
+                  <input
+                    type="checkbox"
+                    checked={filterSessionsByCase}
+                    onChange={(event) => setFilterSessionsByCase(event.target.checked)}
+                  />
+                  <span>선택한 사건 대화만 보기</span>
+                </label>
+              )}
               {sessions.length > 0 ? (
                 <div className="session-list">
                   {filteredSessions.map((session) => (
@@ -476,6 +496,9 @@ export function App() {
                       >
                         <span>{session.is_pinned ? `고정 · ${session.title}` : session.title}</span>
                         <b>{domainLabel(session.domain_code)}</b>
+                        {session.case_id && (
+                          <b className="case-link-badge">{caseTitleForSession(session.case_id) ?? '연결된 사건'}</b>
+                        )}
                         <small>
                           메시지 {session.message_count}개
                           {session.last_message_preview ? ` · ${session.last_message_preview}` : ''}
@@ -491,7 +514,9 @@ export function App() {
                     </article>
                   ))}
                   {filteredSessions.length === 0 && (
-                    <p className="empty-state">검색 조건에 맞는 대화가 없습니다.</p>
+                    <p className="empty-state">
+                      {activeCase && filterSessionsByCase ? '선택한 사건에 연결된 대화가 없습니다.' : '검색 조건에 맞는 대화가 없습니다.'}
+                    </p>
                   )}
                 </div>
               ) : (

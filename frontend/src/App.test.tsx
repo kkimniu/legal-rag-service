@@ -214,6 +214,67 @@ describe('App', () => {
     expect(await screen.findByText('계약 종료 후 보증금을 받지 못함')).toBeInTheDocument();
   });
 
+  it('filters chat sessions by the selected legal case', async () => {
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'user@example.com', is_active: true });
+    mockedFetchCases.mockResolvedValue([
+      {
+        id: 1,
+        title: '임대차 사건',
+        summary: '',
+        status: 'active',
+        domain_code: '01_civil_law',
+        created_at: '2026-06-14T09:00:00',
+        updated_at: '2026-06-14T09:00:00',
+        note_count: 0,
+        chat_count: 1,
+      },
+      {
+        id: 2,
+        title: '상표 사건',
+        summary: '',
+        status: 'active',
+        domain_code: '02_intellectual_property_law',
+        created_at: '2026-06-14T09:10:00',
+        updated_at: '2026-06-14T09:10:00',
+        note_count: 0,
+        chat_count: 1,
+      },
+    ]);
+    mockedFetchChatSessions.mockResolvedValue([
+      {
+        id: 10,
+        title: '임대차 상담',
+        case_id: 1,
+        domain_code: '01_civil_law',
+        is_pinned: false,
+        created_at: '2026-06-14T10:00:00',
+        updated_at: '2026-06-14T10:00:00',
+        message_count: 2,
+        last_message_preview: '보증금 반환 검토',
+      },
+      {
+        id: 11,
+        title: '상표권 상담',
+        case_id: 2,
+        domain_code: '02_intellectual_property_law',
+        is_pinned: false,
+        created_at: '2026-06-14T11:00:00',
+        updated_at: '2026-06-14T11:00:00',
+        message_count: 1,
+        last_message_preview: '상표 침해 검토',
+      },
+    ]);
+
+    render(<App />);
+
+    expect((await screen.findAllByText('임대차 상담')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('상표권 상담')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('선택한 사건 대화만 보기'));
+
+    expect(await screen.findByText('상표권 상담')).toBeInTheDocument();
+  });
+
   it('filters and pins chat sessions', async () => {
     const sessions = [
       {

@@ -13,6 +13,15 @@ export type LegalCase = {
   chat_count: number;
 };
 
+export type CaseNote = {
+  id: number;
+  case_id: number;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -31,6 +40,28 @@ export async function createCase(title: string, domainCode?: string): Promise<Le
     const response = await api.post<LegalCase>(
       '/cases',
       { title, domain_code: domainCode || null },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchCaseNotes(caseId: number): Promise<CaseNote[]> {
+  try {
+    const response = await api.get<CaseNote[]>(`/cases/${caseId}/notes`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function createCaseNote(caseId: number, title: string, content: string): Promise<CaseNote | null> {
+  try {
+    const response = await api.post<CaseNote>(
+      `/cases/${caseId}/notes`,
+      { title: title || null, content },
       { headers: await getAuthHeaders() },
     );
     return response.data;

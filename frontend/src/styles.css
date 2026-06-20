@@ -241,6 +241,60 @@ button:disabled {
   font-size: 12px;
 }
 
+.case-detail {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #d8dee8;
+  padding-top: 12px;
+}
+
+.case-detail h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 15px;
+}
+
+.case-note-form {
+  display: grid;
+  gap: 8px;
+}
+
+.case-note-form textarea {
+  min-height: 96px;
+}
+
+.case-note-list {
+  display: grid;
+  gap: 8px;
+}
+
+.case-note-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.case-note-item strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.case-note-item p {
+  margin: 0;
+  color: #2d3848;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.case-note-item time {
+  color: #536174;
+  font-size: 12px;
+}
+
 .session-list {
   display: grid;
   gap: 10px;

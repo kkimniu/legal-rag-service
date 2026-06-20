@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
-import { createCase, fetchCases, type LegalCase } from './api/cases';
+import { createCase, createCaseNote, fetchCaseNotes, fetchCases, type CaseNote, type LegalCase } from './api/cases';
 import {
   createChatSession,
   deleteChatSession,
@@ -71,7 +71,10 @@ export function App() {
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [cases, setCases] = useState<LegalCase[]>([]);
   const [activeCase, setActiveCase] = useState<LegalCase | null>(null);
+  const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
@@ -126,6 +129,7 @@ export function App() {
     setCases(nextCases);
     if (nextCases.length > 0 && !activeCase) {
       setActiveCase(nextCases[0]);
+      setCaseNotes(await fetchCaseNotes(nextCases[0].id));
     }
   }
 
@@ -139,6 +143,7 @@ export function App() {
       const nextSessions = await fetchChatSessions();
       setCases(nextCases);
       setActiveCase(nextCases[0] ?? null);
+      setCaseNotes(nextCases[0] ? await fetchCaseNotes(nextCases[0].id) : []);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
@@ -157,6 +162,9 @@ export function App() {
     setSessions([]);
     setCases([]);
     setActiveCase(null);
+    setCaseNotes([]);
+    setNoteTitle('');
+    setNoteContent('');
     setActiveSession(null);
     setMessages([]);
     setAuthMessage('로그아웃되었습니다.');
@@ -174,6 +182,12 @@ export function App() {
     setActiveSession(session);
     setMessages(await fetchChatMessages(session.id));
     setChatStatus('대화 이력을 불러왔습니다.');
+  }
+
+  async function handleSelectCase(legalCase: LegalCase) {
+    setActiveCase(legalCase);
+    setCaseNotes(await fetchCaseNotes(legalCase.id));
+    setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
 
   async function handleDeleteSession(session: ChatSession) {
@@ -219,8 +233,31 @@ export function App() {
     }
     setCases((items) => [legalCase, ...items]);
     setActiveCase(legalCase);
+    setCaseNotes([]);
     setCaseTitle('');
     setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
+  }
+
+  async function handleCreateCaseNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeCase || !noteContent.trim()) return;
+    const note = await createCaseNote(activeCase.id, noteTitle.trim(), noteContent.trim());
+    if (!note) {
+      setChatStatus('사건 메모를 저장하지 못했습니다.');
+      return;
+    }
+    setCaseNotes((items) => [...items, note]);
+    setCases((items) =>
+      items.map((item) =>
+        item.id === activeCase.id ? { ...item, note_count: item.note_count + 1, updated_at: note.updated_at } : item,
+      ),
+    );
+    setActiveCase((item) =>
+      item && item.id === activeCase.id ? { ...item, note_count: item.note_count + 1, updated_at: note.updated_at } : item,
+    );
+    setNoteTitle('');
+    setNoteContent('');
+    setChatStatus('사건 메모를 저장했습니다.');
   }
 
   async function handleRegenerate() {
@@ -337,7 +374,10 @@ export function App() {
             <section className="case-panel">
               <div className="section-heading">
                 <h2>사건 노트</h2>
-                <button type="button" className="secondary-button" onClick={() => setActiveCase(null)}>
+                <button type="button" className="secondary-button" onClick={() => {
+                  setActiveCase(null);
+                  setCaseNotes([]);
+                }}>
                   선택 해제
                 </button>
               </div>
@@ -358,7 +398,7 @@ export function App() {
                       type="button"
                       className={activeCase?.id === legalCase.id ? 'case-item active-case' : 'case-item'}
                       key={legalCase.id}
-                      onClick={() => setActiveCase(legalCase)}
+                      onClick={() => handleSelectCase(legalCase)}
                     >
                       <span>{legalCase.title}</span>
                       <small>
@@ -369,6 +409,42 @@ export function App() {
                 </div>
               ) : (
                 <p className="empty-state">아직 사건 노트가 없습니다.</p>
+              )}
+              {activeCase && (
+                <section className="case-detail">
+                  <h3>{activeCase.title}</h3>
+                  <form className="case-note-form" onSubmit={handleCreateCaseNote}>
+                    <label htmlFor="note-title">메모 제목</label>
+                    <input
+                      id="note-title"
+                      value={noteTitle}
+                      onChange={(event) => setNoteTitle(event.target.value)}
+                      placeholder="예: 사실관계"
+                    />
+                    <label htmlFor="note-content">메모 내용</label>
+                    <textarea
+                      id="note-content"
+                      value={noteContent}
+                      onChange={(event) => setNoteContent(event.target.value)}
+                      placeholder="사실관계, 쟁점, 확인할 자료를 적어두세요."
+                      rows={4}
+                    />
+                    <button type="submit">메모 저장</button>
+                  </form>
+                  {caseNotes.length > 0 ? (
+                    <div className="case-note-list">
+                      {caseNotes.map((note) => (
+                        <article className="case-note-item" key={note.id}>
+                          <strong>{note.title}</strong>
+                          <p>{note.content}</p>
+                          <time>{new Date(note.updated_at).toLocaleString('ko-KR')}</time>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-state">이 사건에 저장된 메모가 없습니다.</p>
+                  )}
+                </section>
               )}
             </section>
 

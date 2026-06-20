@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { fetchCurrentUser, login, register } from './api/auth';
-import { createCase, fetchCases } from './api/cases';
+import { createCase, createCaseNote, fetchCaseNotes, fetchCases } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
 
 vi.mock('./api/auth', () => ({
@@ -24,6 +24,8 @@ vi.mock('./api/chat', () => ({
 
 vi.mock('./api/cases', () => ({
   createCase: vi.fn(),
+  createCaseNote: vi.fn(),
+  fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
 }));
 
@@ -36,6 +38,8 @@ const mockedFetchChatMessages = vi.mocked(fetchChatMessages);
 const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 const mockedCreateCase = vi.mocked(createCase);
+const mockedCreateCaseNote = vi.mocked(createCaseNote);
+const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
 
 describe('App', () => {
@@ -45,6 +49,7 @@ describe('App', () => {
     mockedFetchChatSessions.mockResolvedValue([]);
     mockedFetchChatMessages.mockResolvedValue([]);
     mockedFetchCases.mockResolvedValue([]);
+    mockedFetchCaseNotes.mockResolvedValue([]);
   });
 
   it('renders chatbot shell and disabled message box before login', async () => {
@@ -183,6 +188,14 @@ describe('App', () => {
       note_count: 0,
       chat_count: 0,
     });
+    mockedCreateCaseNote.mockResolvedValue({
+      id: 7,
+      case_id: 3,
+      title: '핵심 사실',
+      content: '계약 종료 후 보증금을 받지 못함',
+      created_at: '2026-06-14T12:10:00',
+      updated_at: '2026-06-14T12:10:00',
+    });
 
     render(<App />);
 
@@ -191,7 +204,14 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: '사건 만들기' }));
 
     expect(mockedCreateCase).toHaveBeenCalledWith('임대차 보증금 반환', '01_civil_law');
-    expect(await screen.findByText('임대차 보증금 반환')).toBeInTheDocument();
+    expect((await screen.findAllByText('임대차 보증금 반환')).length).toBeGreaterThan(0);
+
+    await userEvent.type(screen.getByLabelText('메모 제목'), '핵심 사실');
+    await userEvent.type(screen.getByLabelText('메모 내용'), '계약 종료 후 보증금을 받지 못함');
+    await userEvent.click(screen.getByRole('button', { name: '메모 저장' }));
+
+    expect(mockedCreateCaseNote).toHaveBeenCalledWith(3, '핵심 사실', '계약 종료 후 보증금을 받지 못함');
+    expect(await screen.findByText('계약 종료 후 보증금을 받지 못함')).toBeInTheDocument();
   });
 
   it('filters and pins chat sessions', async () => {

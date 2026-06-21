@@ -108,6 +108,31 @@ export async function updateCaseStatus(caseId: number, status: CaseStatus): Prom
   }
 }
 
+export async function updateCase(
+  caseId: number,
+  payload: { title?: string; summary?: string; status?: CaseStatus },
+): Promise<LegalCase | null> {
+  try {
+    const response = await api.patch<LegalCase>(
+      `/cases/${caseId}`,
+      payload,
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCase(caseId: number): Promise<boolean> {
+  try {
+    await api.delete(`/cases/${caseId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function generateCaseInsight(caseId: number): Promise<CaseInsight | null> {
   try {
     const response = await api.post<CaseInsight>(`/cases/${caseId}/insight`, null, {
@@ -292,6 +317,39 @@ export async function downloadCaseAttachment(
 export async function deleteCaseAttachment(caseId: number, attachmentId: number): Promise<boolean> {
   try {
     await api.delete(`/cases/${caseId}/attachments/${attachmentId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function ocrCaseAttachment(caseId: number, attachmentId: number): Promise<CaseAttachment | null> {
+  try {
+    const response = await api.post<CaseAttachment>(
+      `/cases/${caseId}/attachments/${attachmentId}/ocr`,
+      null,
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadCaseReport(caseId: number, caseTitle: string): Promise<boolean> {
+  try {
+    const response = await api.get<Blob>(`/cases/${caseId}/report`, {
+      headers: await getAuthHeaders(),
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${caseTitle}_보고서.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
     return true;
   } catch {
     return false;

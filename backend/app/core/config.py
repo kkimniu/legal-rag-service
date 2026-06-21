@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "legal_chunks"
     precedent_chroma_collection_name: str = "precedent_chunks_probe_10k"
-    rag_top_k: int = 5
-    rag_context_max_chars: int = 6000
+    rag_top_k: int = 7
+    rag_context_max_chars: int = 8000
     rag_case_context_max_chars: int = 2500
     rag_max_source_distance: float = 1.25
     rag_min_reliable_sources: int = 1

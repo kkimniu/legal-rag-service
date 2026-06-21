@@ -1,13 +1,15 @@
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
+import React, { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
 import {
   createCase,
   createCaseNote,
   createCaseTask,
+  deleteCase,
   deleteCaseAttachment,
   deleteCaseNote,
   deleteCaseTask,
   downloadCaseAttachment,
+  downloadCaseReport,
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCaseTasks,
@@ -16,6 +18,8 @@ import {
   fetchUpcomingCaseTasks,
   generateCaseInsight,
   indexCaseAttachment,
+  ocrCaseAttachment,
+  updateCase,
   updateCaseStatus,
   updateCaseNote,
   updateCaseTask,
@@ -36,11 +40,12 @@ import {
   fetchChatSession,
   fetchChatSessions,
   sendChatMessage,
+  streamChatMessage,
   updateChatSessionPin,
   type ChatMessage,
   type ChatSession,
 } from './api/chat';
-import { searchPersonalWorkspace, type PersonalSearchResult } from './api/search';
+import { searchPersonalWorkspace, type PersonalSearchResult, type SearchTypeFilter } from './api/search';
 
 const domainOptions = [
   { value: '', label: '전체 분야' },
@@ -121,19 +126,130 @@ function sortCaseTasks(tasks: CaseTask[]) {
   });
 }
 
-function isTaskOverdue(task: CaseTask) {
-  if (!task.due_date || task.is_completed) return false;
-  return task.due_date < new Date().toISOString().slice(0, 10);
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
 }
 
+// ── 법령·판례 출처 자동 링크 ────────────────────────────────────────
+const _KNOWN_STATUTES = [
+  '주택임대차보호법', '상가건물임대차보호법', '채무자 회생 및 파산에 관한 법률',
+  '독점규제 및 공정거래에 관한 법률', '가족관계의 등록 등에 관한 법률',
+  '근로기준법', '민사소송법', '형사소송법', '행정소송법', '행정심판법',
+  '국가배상법', '부동산등기법', '가사소송법', '소비자기본법',
+  '저작권법', '특허법', '상표법', '디자인보호법', '행정기본법', '행정절차법',
+  '민법', '형법', '상법', '헌법',
+];
+
+const _STATUTE_RE = new RegExp(
+  `(${_KNOWN_STATUTES.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})` +
+  `\\s*(제\\d+조(?:의\\d+)?(?:\\s*제\\d+항)?(?:\\s*제\\d+호)?)`,
+  'g',
+);
+
+const _COURT_CASE_RE =
+  /(대법원|헌법재판소|고등법원|지방법원|서울고등법원|부산고등법원|대구고등법원|광주고등법원|수원고등법원)\s+(\d{4}[가-힣]+\d+)/g;
+
+function linkLegalSources(text: string): React.ReactNode {
+  type Seg = { start: number; end: number; node: React.ReactNode };
+  const segments: Seg[] = [];
+
+  _STATUTE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = _STATUTE_RE.exec(text)) !== null) {
+    const [full, statute] = m;
+    const url = `https://www.law.go.kr/법령/${encodeURIComponent(statute)}`;
+    segments.push({
+      start: m.index,
+      end: m.index + full.length,
+      node: (
+        <a key={`s-${m.index}`} href={url} target="_blank" rel="noopener noreferrer" className="legal-source-link">
+          {full}
+        </a>
+      ),
+    });
+  }
+
+  _COURT_CASE_RE.lastIndex = 0;
+  while ((m = _COURT_CASE_RE.exec(text)) !== null) {
+    const [full, , caseNum] = m;
+    const overlaps = segments.some((s) => s.start < m!.index + full.length && s.end > m!.index);
+    if (!overlaps) {
+      const url = `https://glaw.scourt.go.kr/wsjo/panre/sjo060.do?q=${encodeURIComponent(caseNum)}`;
+      segments.push({
+        start: m.index,
+        end: m.index + full.length,
+        node: (
+          <a key={`c-${m.index}`} href={url} target="_blank" rel="noopener noreferrer" className="legal-source-link">
+            {full}
+          </a>
+        ),
+      });
+    }
+  }
+
+  if (segments.length === 0) return text;
+
+  segments.sort((a, b) => a.start - b.start);
+  const nodes: React.ReactNode[] = [];
+  let pos = 0;
+  for (const seg of segments) {
+    if (seg.start > pos) nodes.push(text.slice(pos, seg.start));
+    nodes.push(seg.node);
+    pos = seg.end;
+  }
+  if (pos < text.length) nodes.push(text.slice(pos));
+  return <>{nodes}</>;
+}
+
+function isTaskOverdue(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  return task.due_date < todayString();
+}
+
+function isTaskDueToday(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  return task.due_date === todayString();
+}
+
+function isTaskImminent(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  const today = todayString();
+  const sevenDaysLater = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return task.due_date > today && task.due_date <= sevenDaysLater;
+}
+
+const SEARCH_TYPE_LABELS: Record<PersonalSearchResult['result_type'], string> = {
+  case: '사건',
+  note: '메모',
+  task: '할 일',
+  attachment: '첨부자료',
+  chat: '채팅',
+};
+
+const SEARCH_TYPE_FILTERS: Array<{ value: SearchTypeFilter; label: string }> = [
+  { value: 'all', label: '전체' },
+  { value: 'case', label: '사건' },
+  { value: 'note', label: '메모' },
+  { value: 'task', label: '할 일' },
+  { value: 'attachment', label: '첨부' },
+  { value: 'chat', label: '채팅' },
+];
+
 function searchResultTypeLabel(resultType: PersonalSearchResult['result_type']) {
-  return {
-    case: '사건',
-    note: '메모',
-    task: '할 일',
-    attachment: '첨부자료',
-    chat: '채팅',
-  }[resultType];
+  return SEARCH_TYPE_LABELS[resultType];
+}
+
+const SEARCH_PAGE_SIZE = 8;
+
+function highlightQuery(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i}>{part}</mark>
+      : part
+  );
 }
 
 function timelineTypeLabel(activityType: CaseTimelineItem['activity_type']) {
@@ -166,6 +282,7 @@ export function App() {
   const [caseTimeline, setCaseTimeline] = useState<CaseTimelineItem[]>([]);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
   const [upcomingTasks, setUpcomingTasks] = useState<UpcomingCaseTask[]>([]);
+  const [deadlineAlertDismissed, setDeadlineAlertDismissed] = useState(false);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
@@ -175,8 +292,13 @@ export function App() {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingCase, setEditingCase] = useState<LegalCase | null>(null);
+  const [editCaseTitle, setEditCaseTitle] = useState('');
+  const [editCaseSummary, setEditCaseSummary] = useState('');
+  const [deletingCaseId, setDeletingCaseId] = useState<number | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [indexingAttachmentId, setIndexingAttachmentId] = useState<number | null>(null);
+  const [ocringAttachmentId, setOcringAttachmentId] = useState<number | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -185,7 +307,11 @@ export function App() {
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   const [workspaceSearch, setWorkspaceSearch] = useState('');
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<PersonalSearchResult[]>([]);
+  const [workspaceSearchTotalCount, setWorkspaceSearchTotalCount] = useState(0);
+  const [searchTypeFilter, setSearchTypeFilter] = useState<SearchTypeFilter>('all');
+  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
@@ -247,7 +373,7 @@ export function App() {
     if (typeof messageEndRef.current?.scrollIntoView === 'function') {
       messageEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [messages.length, isLoading]);
+  }, [messages.length, isLoading, streamingContent]);
 
   async function refreshSessions() {
     const nextSessions = await fetchChatSessions();
@@ -280,6 +406,7 @@ export function App() {
       const nextCases = await fetchCases();
       const nextSessions = await fetchChatSessions();
       setUpcomingTasks(await fetchUpcomingCaseTasks());
+      setDeadlineAlertDismissed(false);
       setCases(nextCases);
       setActiveCase(nextCases[0] ?? null);
       setCaseInsight(null);
@@ -340,11 +467,25 @@ export function App() {
     const query = workspaceSearch.trim();
     if (query.length < 2) {
       setWorkspaceSearchResults([]);
+      setWorkspaceSearchTotalCount(0);
       return;
     }
-
     setIsWorkspaceSearching(true);
-    setWorkspaceSearchResults(await searchPersonalWorkspace(query));
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
+    const { results, totalCount } = await searchPersonalWorkspace(query, searchTypeFilter);
+    setWorkspaceSearchResults(results);
+    setWorkspaceSearchTotalCount(totalCount);
+    setIsWorkspaceSearching(false);
+  }
+
+  async function handleSearchTypeChange(type: SearchTypeFilter) {
+    setSearchTypeFilter(type);
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
+    if (workspaceSearch.trim().length < 2) return;
+    setIsWorkspaceSearching(true);
+    const { results, totalCount } = await searchPersonalWorkspace(workspaceSearch.trim(), type);
+    setWorkspaceSearchResults(results);
+    setWorkspaceSearchTotalCount(totalCount);
     setIsWorkspaceSearching(false);
   }
 
@@ -412,6 +553,50 @@ export function App() {
     setCases((items) => items.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
     await refreshCaseTimeline(updatedCase.id);
     setChatStatus(`사건 상태를 ${caseStatusLabel(updatedCase.status)} 상태로 변경했습니다.`);
+  }
+
+  function handleOpenEditCase(legalCase: LegalCase) {
+    setEditingCase(legalCase);
+    setEditCaseTitle(legalCase.title);
+    setEditCaseSummary(legalCase.summary);
+  }
+
+  async function handleSaveEditCase(event: FormEvent) {
+    event.preventDefault();
+    if (!editingCase || !editCaseTitle.trim()) return;
+    const updated = await updateCase(editingCase.id, {
+      title: editCaseTitle.trim(),
+      summary: editCaseSummary.trim(),
+    });
+    if (!updated) {
+      setChatStatus('사건 정보를 수정하지 못했습니다.');
+      return;
+    }
+    setCases((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    if (activeCase?.id === updated.id) setActiveCase(updated);
+    setEditingCase(null);
+    setChatStatus('사건 정보를 수정했습니다.');
+  }
+
+  async function handleConfirmDeleteCase() {
+    if (deletingCaseId === null) return;
+    const ok = await deleteCase(deletingCaseId);
+    if (!ok) {
+      setChatStatus('사건을 삭제하지 못했습니다.');
+      setDeletingCaseId(null);
+      return;
+    }
+    setCases((items) => items.filter((item) => item.id !== deletingCaseId));
+    if (activeCase?.id === deletingCaseId) {
+      setActiveCase(null);
+      setCaseNotes([]);
+      setCaseAttachments([]);
+      setCaseTasks([]);
+      setCaseTimeline([]);
+      setCaseInsight(null);
+    }
+    setDeletingCaseId(null);
+    setChatStatus('사건을 삭제했습니다.');
   }
 
   async function refreshCaseTimeline(caseId: number) {
@@ -698,31 +883,49 @@ export function App() {
     setChatStatus(indexed.vector_status === 'completed' ? '첨부자료 AI 색인을 완료했습니다.' : '첨부자료 AI 색인이 대기 상태입니다.');
   }
 
+  async function handleOcrCaseAttachment(attachment: CaseAttachment) {
+    if (!activeCase || ocringAttachmentId !== null) return;
+    setOcringAttachmentId(attachment.id);
+    const updated = await ocrCaseAttachment(activeCase.id, attachment.id);
+    setOcringAttachmentId(null);
+    if (!updated) {
+      setChatStatus('OCR 텍스트 추출을 완료하지 못했습니다.');
+      return;
+    }
+    setCaseAttachments((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    setChatStatus(updated.extraction_status === 'completed' ? 'OCR 텍스트 추출을 완료했습니다.' : 'OCR 텍스트를 추출하지 못했습니다.');
+  }
+
   async function handleRegenerate() {
     if (!activeSession || isLoading) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastUserMsg) return;
 
     setIsLoading(true);
-    setChatStatus('답변을 재생성하는 중입니다.');
-    const turn = await sendChatMessage(activeSession.id, lastUserMsg.content, answerMode);
+    setStreamingContent('');
+    setChatStatus('법률 근거를 검색하는 중입니다...');
+
+    const turn = await streamChatMessage(activeSession.id, lastUserMsg.content, answerMode, (token) => {
+      setStreamingContent((prev) => prev + token);
+      setChatStatus('답변을 재생성하는 중입니다...');
+    });
+
+    setStreamingContent('');
+    setIsLoading(false);
+
     if (!turn) {
       setChatStatus('재생성에 실패했습니다. 백엔드 서버 상태를 확인해주세요.');
-      setIsLoading(false);
       return;
     }
     setMessages((items) => [...items, turn.user_message, turn.assistant_message]);
     setActiveSession(turn.session);
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
     setChatStatus('답변을 재생성했습니다.');
-    setIsLoading(false);
   }
 
   async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!message.trim()) {
-      return;
-    }
+    if (!message.trim()) return;
 
     let session = activeSession;
     if (!session) {
@@ -736,8 +939,9 @@ export function App() {
     }
 
     const content = message.trim();
+    const tempId = -Date.now();
     const optimisticUserMessage: ChatMessage = {
-      id: -Date.now(),
+      id: tempId,
       role: 'user',
       content,
       answer_mode: answerMode,
@@ -749,18 +953,25 @@ export function App() {
     setMessage('');
     setMessages((items) => [...items, optimisticUserMessage]);
     setIsLoading(true);
-    setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
+    setStreamingContent('');
+    setChatStatus('법률 근거를 검색하는 중입니다...');
 
-    const turn = await sendChatMessage(session.id, content, answerMode);
+    const turn = await streamChatMessage(session.id, content, answerMode, (token) => {
+      setStreamingContent((prev) => prev + token);
+      setChatStatus('답변을 생성하는 중입니다...');
+    });
+
+    setStreamingContent('');
+    setIsLoading(false);
+
     if (!turn) {
       setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
-      setMessages((items) => items.filter((item) => item.id !== optimisticUserMessage.id));
-      setIsLoading(false);
+      setMessages((items) => items.filter((item) => item.id !== tempId));
       return;
     }
 
     setMessages((items) => [
-      ...items.filter((item) => item.id !== optimisticUserMessage.id),
+      ...items.filter((item) => item.id !== tempId),
       turn.user_message,
       turn.assistant_message,
     ]);
@@ -768,7 +979,6 @@ export function App() {
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
     if (turn.session.case_id) await refreshCaseTimeline(turn.session.case_id);
     setChatStatus(turn.is_ready ? 'RAG 답변이 생성되었습니다.' : 'RAG 준비가 필요합니다.');
-    setIsLoading(false);
   }
 
   return (
@@ -810,6 +1020,25 @@ export function App() {
 
           {currentUser && (
             <>
+            {!deadlineAlertDismissed && (() => {
+              const overdueCount = upcomingTasks.filter(isTaskOverdue).length;
+              const todayCount = upcomingTasks.filter(isTaskDueToday).length;
+              if (overdueCount === 0 && todayCount === 0) return null;
+              const parts = [];
+              if (overdueCount > 0) parts.push(`기한 초과 ${overdueCount}건`);
+              if (todayCount > 0) parts.push(`오늘 마감 ${todayCount}건`);
+              return (
+                <div className="deadline-alert" role="alert">
+                  <span>⚠️ {parts.join(' · ')}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="알림 닫기"
+                    onClick={() => setDeadlineAlertDismissed(true)}
+                  >✕</button>
+                </div>
+              );
+            })()}
             <section className="workspace-search-panel">
               <form className="workspace-search-form" onSubmit={handleWorkspaceSearch}>
                 <label htmlFor="workspace-search">통합 검색</label>
@@ -826,19 +1055,47 @@ export function App() {
                   </button>
                 </div>
               </form>
-              {workspaceSearchResults.length > 0 && (
+              {(workspaceSearchResults.length > 0 || workspaceSearchTotalCount > 0) && (
                 <div className="workspace-search-results" aria-label="통합 검색 결과">
-                  {workspaceSearchResults.map((result) => (
+                  <div className="search-filter-chips" role="group" aria-label="유형 필터">
+                    {SEARCH_TYPE_FILTERS.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={searchTypeFilter === value ? 'search-chip active' : 'search-chip'}
+                        onClick={() => handleSearchTypeChange(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="search-count">
+                    총 {workspaceSearchTotalCount}건
+                    {workspaceSearchTotalCount > searchVisibleCount && ` (${searchVisibleCount}건 표시 중)`}
+                  </p>
+                  {workspaceSearchResults.slice(0, searchVisibleCount).map((result) => (
                     <button
                       type="button"
                       key={`${result.result_type}-${result.id}`}
                       onClick={() => handleSelectSearchResult(result)}
                     >
                       <span>{searchResultTypeLabel(result.result_type)}</span>
-                      <strong>{result.title}</strong>
-                      <p>{result.snippet}</p>
+                      <strong>{highlightQuery(result.title, workspaceSearch)}</strong>
+                      <p>{highlightQuery(result.snippet, workspaceSearch)}</p>
                     </button>
                   ))}
+                  {searchVisibleCount < workspaceSearchResults.length && (
+                    <button
+                      type="button"
+                      className="search-load-more"
+                      onClick={() => setSearchVisibleCount((n) => n + SEARCH_PAGE_SIZE)}
+                    >
+                      더 보기 ({workspaceSearchResults.length - searchVisibleCount}건 남음)
+                    </button>
+                  )}
+                  {workspaceSearchResults.length === 0 && (
+                    <p className="empty-state">검색 결과가 없습니다.</p>
+                  )}
                 </div>
               )}
             </section>
@@ -856,30 +1113,99 @@ export function App() {
                   선택 해제
                 </button>
               </div>
-              <section className="deadline-dashboard">
-                <div className="deadline-dashboard-heading">
-                  <h3>다가오는 기한</h3>
-                  <span>30일 이내</span>
-                </div>
-                {upcomingTasks.length > 0 ? (
-                  <div className="deadline-list">
-                    {upcomingTasks.slice(0, 5).map((task) => (
-                      <button
-                        type="button"
-                        className={isTaskOverdue(task) ? 'deadline-item overdue' : 'deadline-item'}
-                        key={task.id}
-                        onClick={() => handleSelectUpcomingTask(task)}
-                      >
-                        <strong>{task.title}</strong>
-                        <span>{task.case_title}</span>
-                        <time>{isTaskOverdue(task) ? `기한 초과 · ${task.due_date}` : task.due_date}</time>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty-state">30일 이내 예정된 기한이 없습니다.</p>
-                )}
-              </section>
+              {(() => {
+                const overdueTasks = upcomingTasks.filter(isTaskOverdue);
+                const todayTasks = upcomingTasks.filter(isTaskDueToday);
+                const imminentTasks = upcomingTasks.filter(isTaskImminent);
+                const laterTasks = upcomingTasks.filter(
+                  (t) => !isTaskOverdue(t) && !isTaskDueToday(t) && !isTaskImminent(t),
+                );
+                const urgentCount = overdueTasks.length + todayTasks.length;
+                return (
+                  <section className="deadline-dashboard">
+                    <div className="deadline-dashboard-heading">
+                      <h3>기한 알림 센터</h3>
+                      {urgentCount > 0 && (
+                        <span className="deadline-urgent-badge">{urgentCount}</span>
+                      )}
+                    </div>
+                    {upcomingTasks.length === 0 ? (
+                      <p className="empty-state">30일 이내 예정된 기한이 없습니다.</p>
+                    ) : (
+                      <div className="deadline-groups">
+                        {overdueTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label overdue">기한 초과 {overdueTasks.length}건</div>
+                            {overdueTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item overdue"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {todayTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label today">오늘 마감 {todayTasks.length}건</div>
+                            {todayTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item today"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>오늘</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {imminentTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label imminent">7일 이내 {imminentTasks.length}건</div>
+                            {imminentTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item imminent"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {laterTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label later">이후 예정 {laterTasks.length}건</div>
+                            {laterTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
               <form className="case-form" onSubmit={handleCreateCase}>
                 <label htmlFor="case-title">새 사건</label>
                 <input
@@ -931,17 +1257,35 @@ export function App() {
               {cases.length > 0 ? (
                 <div className="case-list">
                   {filteredCases.map((legalCase) => (
-                    <button
-                      type="button"
+                    <div
                       className={activeCase?.id === legalCase.id ? 'case-item active-case' : 'case-item'}
                       key={legalCase.id}
-                      onClick={() => handleSelectCase(legalCase)}
                     >
-                      <span>{legalCase.title}</span>
-                      <small>
-                        {caseStatusLabel(legalCase.status)} · {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
-                      </small>
-                    </button>
+                      <button
+                        type="button"
+                        className="case-item-body"
+                        onClick={() => handleSelectCase(legalCase)}
+                      >
+                        <span>{legalCase.title}</span>
+                        <small>
+                          {caseStatusLabel(legalCase.status)} · {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
+                        </small>
+                      </button>
+                      <div className="case-item-actions">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="사건 수정"
+                          onClick={(e) => { e.stopPropagation(); handleOpenEditCase(legalCase); }}
+                        >✏️</button>
+                        <button
+                          type="button"
+                          className="icon-button danger"
+                          title="사건 삭제"
+                          onClick={(e) => { e.stopPropagation(); setDeletingCaseId(legalCase.id); }}
+                        >🗑️</button>
+                      </div>
+                    </div>
                   ))}
                   {filteredCases.length === 0 && (
                     <p className="empty-state">조건에 맞는 사건이 없습니다.</p>
@@ -957,6 +1301,14 @@ export function App() {
                     <div className="case-detail-actions">
                       <button type="button" className="secondary-button" onClick={handleGenerateCaseInsight} disabled={isGeneratingCaseInsight}>
                         {isGeneratingCaseInsight ? '정리 중' : 'AI 사건 정리'}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        title="사건 요약·메모·할 일·채팅을 Markdown 파일로 저장"
+                        onClick={() => downloadCaseReport(activeCase.id, activeCase.title)}
+                      >
+                        보고서 내보내기
                       </button>
                       <button type="button" className="secondary-button" onClick={handleStartCaseChat}>
                         이 사건 새 대화
@@ -1140,6 +1492,7 @@ export function App() {
                         <input
                           type="file"
                           aria-label="첨부 파일"
+                          accept=".pdf,.txt,.md,.csv,.json,.log,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif"
                           onChange={handleUploadCaseAttachment}
                           disabled={isUploadingAttachment}
                         />
@@ -1167,6 +1520,16 @@ export function App() {
                               >
                                 다운로드
                               </button>
+                              {attachment.extraction_status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  onClick={() => handleOcrCaseAttachment(attachment)}
+                                  disabled={ocringAttachmentId !== null}
+                                >
+                                  {ocringAttachmentId === attachment.id ? 'OCR 중' : 'OCR 추출'}
+                                </button>
+                              )}
                               {attachment.extraction_status === 'completed' && attachment.vector_status !== 'completed' && (
                                 <button
                                   type="button"
@@ -1379,7 +1742,7 @@ export function App() {
                       {evidenceStatusLabel(item.evidence_status)}
                     </b>
                   )}
-                  <p>{item.content}</p>
+                  <p>{item.role === 'assistant' ? linkLegalSources(item.content) : item.content}</p>
                   {item.evidence_warnings && item.evidence_warnings.length > 0 && (
                     <details className="evidence-warning-details">
                       <summary>근거 품질 경고 {item.evidence_warnings.length}개</summary>
@@ -1408,7 +1771,16 @@ export function App() {
                                   {sourceEvidenceLabel} 근거 {index + 1}
                                 </span>
                                 <span>{source.domain_name ?? '분야 미상'}</span>
-                                {sourceCaseNumber && <span>{sourceCaseNumber}</span>}
+                                {sourceCaseNumber && (
+                                  <a
+                                    href={`https://glaw.scourt.go.kr/wsjo/panre/sjo060.do?q=${encodeURIComponent(sourceCaseNumber)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="legal-source-link"
+                                  >
+                                    {sourceCaseNumber}
+                                  </a>
+                                )}
                                 {source.score !== null && source.score !== undefined && (
                                   <span>유사도 {(1 - source.score).toFixed(3)}</span>
                                 )}
@@ -1457,6 +1829,18 @@ export function App() {
                 <p>한 채팅 안에서는 이전 질문과 답변이 누적되고, 새 주제는 새 대화에서 다시 시작합니다.</p>
               </div>
             )}
+            {isLoading && streamingContent && (
+              <article className="message-bubble assistant streaming-message">
+                <span>AI</span>
+                <div className="streaming-text">{streamingContent}<span className="streaming-cursor" /></div>
+              </article>
+            )}
+            {isLoading && !streamingContent && (
+              <article className="message-bubble assistant streaming-message">
+                <span>AI</span>
+                <div className="typing-indicator"><span /><span /><span /></div>
+              </article>
+            )}
             <div ref={messageEndRef} />
           </div>
 
@@ -1476,6 +1860,48 @@ export function App() {
           </form>
         </section>
       </section>
+
+      {editingCase && (
+        <div className="modal-overlay" onClick={() => setEditingCase(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleSaveEditCase}>
+            <h3>사건 수정</h3>
+            <label className="modal-label">
+              제목
+              <input
+                value={editCaseTitle}
+                onChange={(e) => setEditCaseTitle(e.target.value)}
+                maxLength={255}
+                required
+              />
+            </label>
+            <label className="modal-label">
+              요약
+              <textarea
+                value={editCaseSummary}
+                onChange={(e) => setEditCaseSummary(e.target.value)}
+                rows={4}
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="submit">저장</button>
+              <button type="button" className="secondary-button" onClick={() => setEditingCase(null)}>취소</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deletingCaseId !== null && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>사건 삭제</h3>
+            <p>사건과 모든 메모, 할 일, 첨부자료가 영구 삭제됩니다. 계속하시겠습니까?</p>
+            <div className="modal-actions">
+              <button className="danger-button" onClick={handleConfirmDeleteCase}>삭제</button>
+              <button className="secondary-button" onClick={() => setDeletingCaseId(null)}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

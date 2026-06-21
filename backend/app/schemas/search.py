@@ -18,3 +18,4 @@ class PersonalSearchResult(BaseModel):
 class PersonalSearchResponse(BaseModel):
     query: str
     results: list[PersonalSearchResult]
+    total_count: int = 0

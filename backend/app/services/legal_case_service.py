@@ -72,6 +72,39 @@ def update_legal_case_status(
     return legal_case
 
 
+def update_legal_case(
+    db: Session,
+    legal_case: LegalCase,
+    title: str | None = None,
+    summary: str | None = None,
+    status: str | None = None,
+) -> LegalCase:
+    """Update title, summary, and/or status for one owned legal matter."""
+    if title is not None:
+        legal_case.title = title.strip()
+    if summary is not None:
+        legal_case.summary = summary.strip()
+    if status is not None:
+        legal_case.status = status
+    legal_case.updated_at = datetime.now(UTC)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(legal_case)
+    return legal_case
+
+
+def delete_legal_case(db: Session, legal_case: LegalCase) -> None:
+    """Delete one owned legal matter and all its child records and files."""
+    from app.services.case_attachment_vector_service import delete_case_attachment_vectors
+
+    for attachment in list_case_attachments(db, legal_case.id):
+        delete_case_attachment_vectors(attachment.id)
+        Path(attachment.storage_path).unlink(missing_ok=True)
+
+    db.delete(legal_case)
+    db.commit()
+
+
 def generate_case_insight(db: Session, legal_case: LegalCase) -> dict[str, object]:
     """Generate and persist a compact AI summary for one owned legal matter."""
     notes = list_case_notes(db, legal_case.id, limit=30)
@@ -327,6 +360,9 @@ def build_case_attachment_context(db: Session, case_id: int) -> str:
     return "사건 첨부자료 추출 내용:\n" + "\n\n".join(sections)
 
 
+_IMAGE_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif"})
+
+
 def extract_attachment_text(path: Path, content_type: str | None = None) -> tuple[str, str]:
     """Extract text from supported user-uploaded case files."""
     suffix = path.suffix.lower()
@@ -334,12 +370,42 @@ def extract_attachment_text(path: Path, content_type: str | None = None) -> tupl
         if suffix in {".txt", ".md", ".csv", ".json", ".log"} or (content_type or "").startswith("text/"):
             return _clip_extracted_text(_read_text_file(path)), "completed"
         if suffix == ".pdf":
-            return _extract_pdf_text(path)
+            text, status = _extract_pdf_text(path)
+            if not text or len(text.strip()) < 50:
+                ocr_text, ocr_status = _extract_pdf_text_ocr(path)
+                if ocr_text:
+                    return ocr_text, ocr_status
+            return text, status
         if suffix == ".docx":
             return _extract_docx_text(path)
+        if suffix in _IMAGE_SUFFIXES:
+            return _extract_image_text_ocr(path)
     except Exception:
         return "", "failed"
     return "", "unsupported"
+
+
+def ocr_case_attachment(db: Session, attachment: "CaseAttachment") -> "CaseAttachment":
+    """Re-run OCR extraction on an existing attachment and persist the result."""
+    path = Path(attachment.storage_path)
+    suffix = path.suffix.lower()
+    try:
+        if suffix in _IMAGE_SUFFIXES:
+            text, extraction_status = _extract_image_text_ocr(path)
+        elif suffix == ".pdf":
+            text, extraction_status = _extract_pdf_text_ocr(path)
+            if not text:
+                text, extraction_status = _extract_pdf_text(path)
+        else:
+            text, extraction_status = extract_attachment_text(path, attachment.content_type)
+    except Exception:
+        text, extraction_status = "", "failed"
+    attachment.extracted_text = text
+    attachment.extraction_status = extraction_status
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+    return attachment
 
 
 def _read_text_file(path: Path) -> str:
@@ -376,6 +442,98 @@ def _extract_docx_text(path: Path) -> tuple[str, str]:
     return text, "completed" if text else "empty"
 
 
+def _ocr_via_openai(image_b64: str, mime_type: str) -> str:
+    """Call GPT-4o-mini Vision to extract text from a base64-encoded image."""
+    if not settings.openai_api_key or str(settings.openai_api_key).startswith("replace-"):
+        return ""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=str(settings.openai_api_key))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{image_b64}",
+                                "detail": "high",
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "이 이미지에 있는 모든 텍스트를 정확하게 추출해 주세요. "
+                                "원본 레이아웃과 줄바꿈을 최대한 유지하고, 텍스트만 출력하세요. "
+                                "텍스트가 없으면 빈 문자열을 반환하세요."
+                            ),
+                        },
+                    ],
+                }
+            ],
+            max_tokens=4000,
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception:
+        return ""
+
+
+def _extract_image_text_ocr(path: Path) -> tuple[str, str]:
+    """Extract text from an image file (JPG/PNG/etc.) using OpenAI Vision."""
+    import base64
+    import io
+
+    try:
+        from PIL import Image as PILImage
+        with PILImage.open(path) as img:
+            max_side = 1920
+            if max(img.size) > max_side:
+                ratio = max_side / max(img.size)
+                img = img.resize(
+                    (int(img.size[0] * ratio), int(img.size[1] * ratio)),
+                    PILImage.LANCZOS,
+                )
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            image_b64 = base64.standard_b64encode(buf.getvalue()).decode("utf-8")
+        text = _ocr_via_openai(image_b64, "image/jpeg")
+        if not text:
+            return "", "empty"
+        return _clip_extracted_text(text), "completed"
+    except Exception:
+        return "", "failed"
+
+
+def _extract_pdf_text_ocr(path: Path, max_pages: int = 5) -> tuple[str, str]:
+    """Render image-based PDF pages to JPEG and OCR via OpenAI Vision."""
+    import base64
+
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return "", "unsupported"
+    try:
+        doc = fitz.open(str(path))
+        page_texts: list[str] = []
+        n = min(len(doc), max_pages)
+        for i in range(n):
+            pix = doc[i].get_pixmap(matrix=fitz.Matrix(150 / 72, 150 / 72))
+            image_b64 = base64.standard_b64encode(pix.tobytes("jpeg")).decode("utf-8")
+            text = _ocr_via_openai(image_b64, "image/jpeg")
+            if text:
+                page_texts.append(f"[페이지 {i + 1}]\n{text}")
+        doc.close()
+        if not page_texts:
+            return "", "empty"
+        return _clip_extracted_text("\n\n".join(page_texts)), "completed"
+    except Exception:
+        return "", "failed"
+
+
 def _clip_extracted_text(text: str) -> str:
     normalized = re.sub(r"\s+", " ", text).strip()
     return normalized[: settings.case_attachment_extract_max_chars]
@@ -401,6 +559,66 @@ def _fallback_case_insight(legal_case: LegalCase, notes: list[CaseNote]) -> dict
         "cautions": ["자동 정리는 저장된 메모 기반 참고 정보이며, 구체적 판단은 전문가 검토가 필요합니다."],
         "is_ready": bool(settings.openai_api_key and not str(settings.openai_api_key).startswith("replace-")),
     }
+
+
+def generate_case_report_markdown(db: Session, legal_case: LegalCase) -> str:
+    """Assemble a Markdown report for one legal matter."""
+    from datetime import date as _date
+    from app.models.chat import ChatMessage, ChatSession
+    from app.services.chat_service import list_chat_messages
+
+    status_map = {"active": "진행중", "watching": "관찰중", "closed": "종결"}
+    today = _date.today().isoformat()
+    lines: list[str] = [
+        f"# {legal_case.title}",
+        "",
+        f"**생성일**: {today}  ",
+        f"**상태**: {status_map.get(legal_case.status, legal_case.status)}  ",
+        f"**분야**: {legal_case.domain_code or '미지정'}",
+        "",
+    ]
+
+    if legal_case.summary:
+        lines += ["## 사건 요약", "", legal_case.summary, ""]
+
+    notes = list_case_notes(db, legal_case.id, limit=50)
+    if notes:
+        lines.append("## 메모")
+        for note in notes:
+            lines += [f"### {note.title or '(제목 없음)'}", "", note.content, ""]
+
+    tasks = list_case_tasks(db, legal_case.id, limit=50)
+    if tasks:
+        lines.append("## 할 일과 기한")
+        for task in tasks:
+            mark = "✅" if task.is_completed else "⬜"
+            due = f" (기한: {task.due_date.isoformat()})" if task.due_date else ""
+            lines.append(f"- {mark} {task.title}{due}")
+        lines.append("")
+
+    sessions = list(
+        db.scalars(
+            select(ChatSession)
+            .where(ChatSession.case_id == legal_case.id)
+            .order_by(ChatSession.created_at)
+        )
+    )
+    if sessions:
+        lines.append("## 채팅 근거")
+        for session in sessions:
+            lines += [f"### {session.title}", ""]
+            for msg in list_chat_messages(db, session.id, limit=100):
+                role_label = "**사용자**" if msg.role == "user" else "**AI**"
+                lines += [f"{role_label}: {msg.content}", ""]
+                if msg.role == "assistant" and msg.sources:
+                    for src in msg.sources[:5]:
+                        if isinstance(src, dict):
+                            title = src.get("title") or ""
+                            excerpt = (src.get("text") or "")[:120]
+                            lines.append(f"> 출처: {title} — {excerpt}")
+                    lines.append("")
+
+    return "\n".join(lines)
 
 
 def _normalize_case_insight(parsed: object, fallback: dict[str, object]) -> dict[str, object]:

@@ -89,6 +89,57 @@ export async function sendChatMessage(sessionId: number, content: string, answer
   }
 }
 
+const _BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1';
+
+export type StreamChatEvent =
+  | { type: 'user_message'; message: ChatMessage }
+  | { type: 'token'; content: string }
+  | { type: 'done'; session: ChatSession; user_message: ChatMessage; assistant_message: ChatMessage; is_ready: boolean };
+
+export async function streamChatMessage(
+  sessionId: number,
+  content: string,
+  answerMode: string,
+  onToken: (token: string) => void,
+): Promise<ChatTurn | null> {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${_BASE_URL}/chat/sessions/${sessionId}/messages/stream`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, answer_mode: answerMode }),
+    });
+    if (!response.ok || !response.body) return null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: ChatTurn | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6)) as StreamChatEvent;
+          if (event.type === 'token') {
+            onToken(event.content);
+          } else if (event.type === 'done') {
+            result = { session: event.session, user_message: event.user_message, assistant_message: event.assistant_message, is_ready: event.is_ready };
+          }
+        } catch { /* skip malformed SSE line */ }
+      }
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteChatSession(sessionId: number): Promise<boolean> {
   try {
     await api.delete(`/chat/sessions/${sessionId}`, { headers: await getAuthHeaders() });

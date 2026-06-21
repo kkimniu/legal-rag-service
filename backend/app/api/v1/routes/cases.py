@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -31,14 +31,18 @@ from app.services.legal_case_service import (
     create_legal_case,
     delete_case_attachment,
     delete_case_note,
+    delete_legal_case,
     generate_case_insight,
+    generate_case_report_markdown,
     get_case_attachment,
     get_case_note,
     get_legal_case,
     list_case_attachments,
     list_case_notes,
     list_legal_cases,
+    ocr_case_attachment,
     update_case_note,
+    update_legal_case,
     update_legal_case_status,
 )
 from app.services.case_attachment_vector_service import (
@@ -148,11 +152,27 @@ def update_case(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LegalCaseRead:
-    """Update one owned legal matter."""
+    """Update title, summary, and/or status for one owned legal matter."""
     legal_case = get_legal_case(db, current_user.id, case_id)
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
-    return case_read(update_legal_case_status(db, legal_case, payload.status), db)
+    return case_read(
+        update_legal_case(db, legal_case, title=payload.title, summary=payload.summary, status=payload.status),
+        db,
+    )
+
+
+@router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_case(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete one owned legal matter and all its associated data."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    delete_legal_case(db, legal_case)
 
 
 @router.post("/{case_id}/insight", response_model=CaseInsightRead)
@@ -297,6 +317,26 @@ def index_attachment(
     return attachment_read(index_case_attachment(db, legal_case, attachment))
 
 
+@router.post("/{case_id}/attachments/{attachment_id}/ocr", response_model=CaseAttachmentRead)
+def run_attachment_ocr(
+    case_id: int,
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseAttachmentRead:
+    """Re-extract text from a case attachment using OCR."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    attachment = get_case_attachment(db, legal_case.id, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+    updated = ocr_case_attachment(db, attachment)
+    if updated.extraction_status == "completed" and updated.extracted_text:
+        updated = index_case_attachment(db, legal_case, updated)
+    return attachment_read(updated)
+
+
 @router.get("/{case_id}/attachments/{attachment_id}/download", response_class=FileResponse)
 def download_attachment(
     case_id: int,
@@ -411,3 +451,23 @@ def delete_task(
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case task was not found.")
     delete_case_task(db, legal_case, task)
+
+
+@router.get("/{case_id}/report")
+def download_case_report(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Download a Markdown report for one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    content = generate_case_report_markdown(db, legal_case)
+    safe_title = "".join(c if c.isalnum() or c in "-_ " else "_" for c in legal_case.title)[:50]
+    filename = f"{safe_title}_보고서.md"
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )

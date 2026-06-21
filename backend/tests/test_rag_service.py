@@ -64,6 +64,54 @@ def test_assess_sources_filters_weak_evidence() -> None:
     assert any("법령 근거" in warning for warning in warnings)
 
 
+def test_expand_query_returns_synonyms_for_known_term() -> None:
+    service = RagService()
+
+    expanded = service._expand_query("전세사기 당했어요", ["전세사기"])
+
+    assert "임대차" in expanded
+    assert "주택임대차보호법" in expanded
+    assert "보증금반환" in expanded
+
+
+def test_expand_query_returns_empty_for_unknown_term() -> None:
+    service = RagService()
+
+    expanded = service._expand_query("블록체인 관련 문제", ["블록체인"])
+
+    assert expanded == []
+
+
+def test_extract_keywords_returns_up_to_five() -> None:
+    service = RagService()
+
+    keywords = service._extract_keywords("임대차 계약 보증금 반환 소멸시효 기산점은 언제인가요")
+
+    assert len(keywords) <= 5
+    assert len(keywords) >= 3
+    assert "임대차" in keywords
+    assert "보증금" in keywords
+
+
+def test_extract_keywords_removes_stopwords() -> None:
+    service = RagService()
+
+    keywords = service._extract_keywords("어떤 경우에 손해배상 청구가 가능한가요")
+
+    assert "어떤" not in keywords
+    assert "경우" not in keywords
+    assert "손해배상" in keywords
+
+
+def test_build_retrieval_question_includes_expanded_terms() -> None:
+    service = RagService()
+
+    retrieval_question = service._build_retrieval_question("전세사기 당한 경우 어떻게 하나요?", [])
+
+    assert "관련 법률 용어" in retrieval_question
+    assert "주택임대차보호법" in retrieval_question
+
+
 def test_insufficient_evidence_answer_uses_safe_format() -> None:
     service = RagService()
 

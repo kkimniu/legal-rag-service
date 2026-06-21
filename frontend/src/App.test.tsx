@@ -23,7 +23,8 @@ import {
   updateCaseTask,
   uploadCaseAttachment,
 } from './api/cases';
-import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
+import { createChatSession, fetchChatMessages, fetchChatSession, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
+import { searchPersonalWorkspace } from './api/search';
 
 vi.mock('./api/auth', () => ({
   clearStoredToken: vi.fn(),
@@ -36,9 +37,14 @@ vi.mock('./api/chat', () => ({
   createChatSession: vi.fn(),
   deleteChatSession: vi.fn(),
   fetchChatMessages: vi.fn(),
+  fetchChatSession: vi.fn(),
   fetchChatSessions: vi.fn(),
   sendChatMessage: vi.fn(),
   updateChatSessionPin: vi.fn(),
+}));
+
+vi.mock('./api/search', () => ({
+  searchPersonalWorkspace: vi.fn(),
 }));
 
 vi.mock('./api/cases', () => ({
@@ -68,6 +74,7 @@ const mockedRegister = vi.mocked(register);
 const mockedCreateChatSession = vi.mocked(createChatSession);
 const mockedFetchChatSessions = vi.mocked(fetchChatSessions);
 const mockedFetchChatMessages = vi.mocked(fetchChatMessages);
+const mockedFetchChatSession = vi.mocked(fetchChatSession);
 const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 const mockedCreateCase = vi.mocked(createCase);
@@ -88,6 +95,7 @@ const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 const mockedUpdateCaseTask = vi.mocked(updateCaseTask);
 const mockedUploadCaseAttachment = vi.mocked(uploadCaseAttachment);
+const mockedSearchPersonalWorkspace = vi.mocked(searchPersonalWorkspace);
 
 describe('App', () => {
   beforeEach(() => {
@@ -95,6 +103,8 @@ describe('App', () => {
     mockedFetchCurrentUser.mockResolvedValue(null);
     mockedFetchChatSessions.mockResolvedValue([]);
     mockedFetchChatMessages.mockResolvedValue([]);
+    mockedFetchChatSession.mockResolvedValue(null);
+    mockedSearchPersonalWorkspace.mockResolvedValue([]);
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
@@ -555,6 +565,45 @@ describe('App', () => {
     await userEvent.click(deadlineButton);
 
     expect(mockedFetchCaseTasks).toHaveBeenCalledWith(4);
+  });
+
+  it('searches the personal workspace and opens an older chat session', async () => {
+    const olderSession = {
+      id: 99,
+      title: '오래된 보증금 상담',
+      case_id: null,
+      domain_code: '01_civil_law',
+      is_pinned: false,
+      created_at: '2026-05-01T10:00:00',
+      updated_at: '2026-05-01T10:00:00',
+      message_count: 2,
+      last_message_preview: '보증금 반환 상담',
+    };
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'search@example.com', is_active: true });
+    mockedSearchPersonalWorkspace.mockResolvedValue([
+      {
+        result_type: 'chat',
+        id: 33,
+        case_id: null,
+        session_id: 99,
+        title: olderSession.title,
+        snippet: '보증금 반환 상담 내용',
+        occurred_at: olderSession.updated_at,
+      },
+    ]);
+    mockedFetchChatSession.mockResolvedValue(olderSession);
+
+    render(<App />);
+
+    const searchInput = await screen.findByLabelText('통합 검색');
+    await userEvent.type(searchInput, '보증금');
+    await userEvent.click(screen.getByRole('button', { name: '검색' }));
+
+    expect(mockedSearchPersonalWorkspace).toHaveBeenCalledWith('보증금');
+    await userEvent.click(await screen.findByRole('button', { name: /오래된 보증금 상담/ }));
+
+    expect(mockedFetchChatSession).toHaveBeenCalledWith(99);
+    expect(mockedFetchChatMessages).toHaveBeenCalledWith(99);
   });
 
   it('filters and pins chat sessions', async () => {

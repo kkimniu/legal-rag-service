@@ -31,12 +31,14 @@ import {
   createChatSession,
   deleteChatSession,
   fetchChatMessages,
+  fetchChatSession,
   fetchChatSessions,
   sendChatMessage,
   updateChatSessionPin,
   type ChatMessage,
   type ChatSession,
 } from './api/chat';
+import { searchPersonalWorkspace, type PersonalSearchResult } from './api/search';
 
 const domainOptions = [
   { value: '', label: '전체 분야' },
@@ -122,6 +124,16 @@ function isTaskOverdue(task: CaseTask) {
   return task.due_date < new Date().toISOString().slice(0, 10);
 }
 
+function searchResultTypeLabel(resultType: PersonalSearchResult['result_type']) {
+  return {
+    case: '사건',
+    note: '메모',
+    task: '할 일',
+    attachment: '첨부자료',
+    chat: '채팅',
+  }[resultType];
+}
+
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
@@ -157,6 +169,9 @@ export function App() {
   const [sessionSearch, setSessionSearch] = useState('');
   const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
+  const [workspaceSearch, setWorkspaceSearch] = useState('');
+  const [workspaceSearchResults, setWorkspaceSearchResults] = useState<PersonalSearchResult[]>([]);
+  const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
@@ -269,6 +284,8 @@ export function App() {
   }
 
   function handleLogout() {
+    setWorkspaceSearch('');
+    setWorkspaceSearchResults([]);
     clearStoredToken();
     setCurrentUser(null);
     setSessions([]);
@@ -299,6 +316,38 @@ export function App() {
     setActiveSession(session);
     setMessages(await fetchChatMessages(session.id));
     setChatStatus('대화 이력을 불러왔습니다.');
+  }
+
+  async function handleWorkspaceSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = workspaceSearch.trim();
+    if (query.length < 2) {
+      setWorkspaceSearchResults([]);
+      return;
+    }
+
+    setIsWorkspaceSearching(true);
+    setWorkspaceSearchResults(await searchPersonalWorkspace(query));
+    setIsWorkspaceSearching(false);
+  }
+
+  async function handleSelectSearchResult(result: PersonalSearchResult) {
+    if (result.case_id) {
+      const legalCase = cases.find((item) => item.id === result.case_id);
+      if (legalCase) await handleSelectCase(legalCase);
+    }
+
+    if (result.session_id) {
+      const session = sessions.find((item) => item.id === result.session_id)
+        ?? await fetchChatSession(result.session_id);
+      if (session) {
+        setSessions((items) => items.some((item) => item.id === session.id) ? items : [session, ...items]);
+        await handleSelectSession(session);
+      }
+    }
+
+    setWorkspaceSearchResults([]);
+    setChatStatus('통합 검색 결과를 열었습니다.');
   }
 
   function handleStartCaseChat() {
@@ -703,6 +752,38 @@ export function App() {
 
           {currentUser && (
             <>
+            <section className="workspace-search-panel">
+              <form className="workspace-search-form" onSubmit={handleWorkspaceSearch}>
+                <label htmlFor="workspace-search">통합 검색</label>
+                <div>
+                  <input
+                    id="workspace-search"
+                    type="search"
+                    value={workspaceSearch}
+                    onChange={(event) => setWorkspaceSearch(event.target.value)}
+                    placeholder="사건, 메모, 채팅, 첨부자료"
+                  />
+                  <button type="submit" disabled={isWorkspaceSearching || workspaceSearch.trim().length < 2}>
+                    {isWorkspaceSearching ? '검색 중' : '검색'}
+                  </button>
+                </div>
+              </form>
+              {workspaceSearchResults.length > 0 && (
+                <div className="workspace-search-results" aria-label="통합 검색 결과">
+                  {workspaceSearchResults.map((result) => (
+                    <button
+                      type="button"
+                      key={`${result.result_type}-${result.id}`}
+                      onClick={() => handleSelectSearchResult(result)}
+                    >
+                      <span>{searchResultTypeLabel(result.result_type)}</span>
+                      <strong>{result.title}</strong>
+                      <p>{result.snippet}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
             <section className="case-panel">
               <div className="section-heading">
                 <h2>사건 노트</h2>

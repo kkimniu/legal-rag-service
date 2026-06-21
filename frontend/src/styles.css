@@ -82,6 +82,76 @@ p {
   padding-top: 16px;
 }
 
+.workspace-search-panel,
+.workspace-search-form,
+.workspace-search-results {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-search-panel {
+  border-top: 1px solid #d8dee8;
+  padding-top: 16px;
+}
+
+.workspace-search-form label {
+  font-size: 14px;
+}
+
+.workspace-search-form > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.workspace-search-form button {
+  align-self: stretch;
+}
+
+.workspace-search-results {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.workspace-search-results button {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #d8dee8;
+  background: #f8fafb;
+  color: #172033;
+  text-align: left;
+}
+
+.workspace-search-results button:hover {
+  border-color: #719186;
+  background: #eef5f2;
+}
+
+.workspace-search-results span {
+  color: #2d6a4f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workspace-search-results strong,
+.workspace-search-results p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.workspace-search-results p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #536174;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .auth-panel {
   padding: 16px;
 }

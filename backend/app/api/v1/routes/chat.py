@@ -86,6 +86,19 @@ def read_sessions(
     return [session_read(session, db) for session in list_chat_sessions(db, current_user.id)]
 
 
+@router.get("/sessions/{session_id}", response_model=ChatSessionRead)
+def read_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ChatSessionRead:
+    """Return one owned chatbot conversation summary."""
+    session = get_chat_session(db, current_user.id, session_id)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat session was not found.")
+    return session_read(session, db)
+
+
 @router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageRead])
 def read_messages(
     session_id: int,

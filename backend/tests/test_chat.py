@@ -131,6 +131,10 @@ def test_chat_session_api_creates_and_reads_owned_session(client: TestClient) ->
         headers=headers,
     )
     sessions_response = client.get("/api/v1/chat/sessions", headers=headers)
+    session_response = client.get(
+        f"/api/v1/chat/sessions/{create_response.json()['id']}",
+        headers=headers,
+    )
     messages_response = client.get(
         f"/api/v1/chat/sessions/{create_response.json()['id']}/messages",
         headers=headers,
@@ -141,6 +145,8 @@ def test_chat_session_api_creates_and_reads_owned_session(client: TestClient) ->
     assert create_response.json()["domain_code"] == "01_civil_law"
     assert create_response.json()["is_pinned"] is False
     assert sessions_response.status_code == 200
+    assert session_response.status_code == 200
+    assert session_response.json()["id"] == create_response.json()["id"]
     assert sessions_response.json()[0]["title"] == "민사법 상담"
     assert sessions_response.json()[0]["domain_code"] == "01_civil_law"
     assert sessions_response.json()[0]["is_pinned"] is False

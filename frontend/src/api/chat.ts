@@ -98,6 +98,15 @@ export async function deleteChatSession(sessionId: number): Promise<boolean> {
   }
 }
 
+export async function fetchChatSession(sessionId: number): Promise<ChatSession | null> {
+  try {
+    const response = await api.get<ChatSession>(`/chat/sessions/${sessionId}`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateChatSessionPin(sessionId: number, isPinned: boolean): Promise<ChatSession | null> {
   try {
     const response = await api.patch<ChatSession>(

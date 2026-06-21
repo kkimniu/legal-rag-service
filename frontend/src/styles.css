@@ -1401,9 +1401,36 @@ summary {
   background: #eef2f6;
 }
 
-.regenerate-btn {
-  display: inline-block;
+.message-actions {
+  display: flex;
+  gap: 6px;
   margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.copy-btn {
+  padding: 4px 12px;
+  border: 1px solid #c5cdd8;
+  border-radius: 999px;
+  background: transparent;
+  color: #4c5b6e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.copy-btn:hover {
+  background: #eef2f6;
+}
+
+.copy-btn.copied {
+  border-color: #2e9e6b;
+  color: #2e9e6b;
+  background: #eef8f4;
+}
+
+.regenerate-btn {
   padding: 4px 12px;
   border: 1px solid #c5cdd8;
   border-radius: 999px;

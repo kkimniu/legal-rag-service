@@ -1534,6 +1534,19 @@ summary {
   justify-content: flex-end;
 }
 
+.legal-source-link {
+  color: #1a5ca8;
+  text-decoration: underline;
+  text-decoration-color: #8ab4e8;
+  text-underline-offset: 2px;
+  border-radius: 2px;
+}
+
+.legal-source-link:hover {
+  color: #0d3d74;
+  text-decoration-color: #0d3d74;
+}
+
 @media (max-width: 620px) {
   .app-shell {
     padding: 12px;

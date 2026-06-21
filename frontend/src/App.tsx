@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
+import React, { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
 import {
   createCase,
@@ -9,6 +9,7 @@ import {
   deleteCaseNote,
   deleteCaseTask,
   downloadCaseAttachment,
+  downloadCaseReport,
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCaseTasks,
@@ -125,6 +126,77 @@ function sortCaseTasks(tasks: CaseTask[]) {
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ── 법령·판례 출처 자동 링크 ────────────────────────────────────────
+const _KNOWN_STATUTES = [
+  '주택임대차보호법', '상가건물임대차보호법', '채무자 회생 및 파산에 관한 법률',
+  '독점규제 및 공정거래에 관한 법률', '가족관계의 등록 등에 관한 법률',
+  '근로기준법', '민사소송법', '형사소송법', '행정소송법', '행정심판법',
+  '국가배상법', '부동산등기법', '가사소송법', '소비자기본법',
+  '저작권법', '특허법', '상표법', '디자인보호법', '행정기본법', '행정절차법',
+  '민법', '형법', '상법', '헌법',
+];
+
+const _STATUTE_RE = new RegExp(
+  `(${_KNOWN_STATUTES.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})` +
+  `\\s*(제\\d+조(?:의\\d+)?(?:\\s*제\\d+항)?(?:\\s*제\\d+호)?)`,
+  'g',
+);
+
+const _COURT_CASE_RE =
+  /(대법원|헌법재판소|고등법원|지방법원|서울고등법원|부산고등법원|대구고등법원|광주고등법원|수원고등법원)\s+(\d{4}[가-힣]+\d+)/g;
+
+function linkLegalSources(text: string): React.ReactNode {
+  type Seg = { start: number; end: number; node: React.ReactNode };
+  const segments: Seg[] = [];
+
+  _STATUTE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = _STATUTE_RE.exec(text)) !== null) {
+    const [full, statute] = m;
+    const url = `https://www.law.go.kr/법령/${encodeURIComponent(statute)}`;
+    segments.push({
+      start: m.index,
+      end: m.index + full.length,
+      node: (
+        <a key={`s-${m.index}`} href={url} target="_blank" rel="noopener noreferrer" className="legal-source-link">
+          {full}
+        </a>
+      ),
+    });
+  }
+
+  _COURT_CASE_RE.lastIndex = 0;
+  while ((m = _COURT_CASE_RE.exec(text)) !== null) {
+    const [full, , caseNum] = m;
+    const overlaps = segments.some((s) => s.start < m!.index + full.length && s.end > m!.index);
+    if (!overlaps) {
+      const url = `https://glaw.scourt.go.kr/wsjo/panre/sjo060.do?q=${encodeURIComponent(caseNum)}`;
+      segments.push({
+        start: m.index,
+        end: m.index + full.length,
+        node: (
+          <a key={`c-${m.index}`} href={url} target="_blank" rel="noopener noreferrer" className="legal-source-link">
+            {full}
+          </a>
+        ),
+      });
+    }
+  }
+
+  if (segments.length === 0) return text;
+
+  segments.sort((a, b) => a.start - b.start);
+  const nodes: React.ReactNode[] = [];
+  let pos = 0;
+  for (const seg of segments) {
+    if (seg.start > pos) nodes.push(text.slice(pos, seg.start));
+    nodes.push(seg.node);
+    pos = seg.end;
+  }
+  if (pos < text.length) nodes.push(text.slice(pos));
+  return <>{nodes}</>;
 }
 
 function isTaskOverdue(task: CaseTask) {
@@ -1201,6 +1273,14 @@ export function App() {
                       <button type="button" className="secondary-button" onClick={handleGenerateCaseInsight} disabled={isGeneratingCaseInsight}>
                         {isGeneratingCaseInsight ? '정리 중' : 'AI 사건 정리'}
                       </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        title="사건 요약·메모·할 일·채팅을 Markdown 파일로 저장"
+                        onClick={() => downloadCaseReport(activeCase.id, activeCase.title)}
+                      >
+                        보고서 내보내기
+                      </button>
                       <button type="button" className="secondary-button" onClick={handleStartCaseChat}>
                         이 사건 새 대화
                       </button>
@@ -1622,7 +1702,7 @@ export function App() {
                       {evidenceStatusLabel(item.evidence_status)}
                     </b>
                   )}
-                  <p>{item.content}</p>
+                  <p>{item.role === 'assistant' ? linkLegalSources(item.content) : item.content}</p>
                   {item.evidence_warnings && item.evidence_warnings.length > 0 && (
                     <details className="evidence-warning-details">
                       <summary>근거 품질 경고 {item.evidence_warnings.length}개</summary>
@@ -1651,7 +1731,16 @@ export function App() {
                                   {sourceEvidenceLabel} 근거 {index + 1}
                                 </span>
                                 <span>{source.domain_name ?? '분야 미상'}</span>
-                                {sourceCaseNumber && <span>{sourceCaseNumber}</span>}
+                                {sourceCaseNumber && (
+                                  <a
+                                    href={`https://glaw.scourt.go.kr/wsjo/panre/sjo060.do?q=${encodeURIComponent(sourceCaseNumber)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="legal-source-link"
+                                  >
+                                    {sourceCaseNumber}
+                                  </a>
+                                )}
                                 {source.score !== null && source.score !== undefined && (
                                   <span>유사도 {(1 - source.score).toFixed(3)}</span>
                                 )}

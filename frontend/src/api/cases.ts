@@ -322,3 +322,23 @@ export async function deleteCaseAttachment(caseId: number, attachmentId: number)
     return false;
   }
 }
+
+export async function downloadCaseReport(caseId: number, caseTitle: string): Promise<boolean> {
+  try {
+    const response = await api.get<Blob>(`/cases/${caseId}/report`, {
+      headers: await getAuthHeaders(),
+      responseType: 'blob',
+    });
+    const url = URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${caseTitle}_보고서.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}

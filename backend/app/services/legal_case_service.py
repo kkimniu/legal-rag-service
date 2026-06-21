@@ -436,6 +436,66 @@ def _fallback_case_insight(legal_case: LegalCase, notes: list[CaseNote]) -> dict
     }
 
 
+def generate_case_report_markdown(db: Session, legal_case: LegalCase) -> str:
+    """Assemble a Markdown report for one legal matter."""
+    from datetime import date as _date
+    from app.models.chat import ChatMessage, ChatSession
+    from app.services.chat_service import list_chat_messages
+
+    status_map = {"active": "진행중", "watching": "관찰중", "closed": "종결"}
+    today = _date.today().isoformat()
+    lines: list[str] = [
+        f"# {legal_case.title}",
+        "",
+        f"**생성일**: {today}  ",
+        f"**상태**: {status_map.get(legal_case.status, legal_case.status)}  ",
+        f"**분야**: {legal_case.domain_code or '미지정'}",
+        "",
+    ]
+
+    if legal_case.summary:
+        lines += ["## 사건 요약", "", legal_case.summary, ""]
+
+    notes = list_case_notes(db, legal_case.id, limit=50)
+    if notes:
+        lines.append("## 메모")
+        for note in notes:
+            lines += [f"### {note.title or '(제목 없음)'}", "", note.content, ""]
+
+    tasks = list_case_tasks(db, legal_case.id, limit=50)
+    if tasks:
+        lines.append("## 할 일과 기한")
+        for task in tasks:
+            mark = "✅" if task.is_completed else "⬜"
+            due = f" (기한: {task.due_date.isoformat()})" if task.due_date else ""
+            lines.append(f"- {mark} {task.title}{due}")
+        lines.append("")
+
+    sessions = list(
+        db.scalars(
+            select(ChatSession)
+            .where(ChatSession.case_id == legal_case.id)
+            .order_by(ChatSession.created_at)
+        )
+    )
+    if sessions:
+        lines.append("## 채팅 근거")
+        for session in sessions:
+            lines += [f"### {session.title}", ""]
+            for msg in list_chat_messages(db, session.id, limit=100):
+                role_label = "**사용자**" if msg.role == "user" else "**AI**"
+                lines += [f"{role_label}: {msg.content}", ""]
+                if msg.role == "assistant" and msg.sources:
+                    for src in msg.sources[:5]:
+                        if isinstance(src, dict):
+                            title = src.get("title") or ""
+                            excerpt = (src.get("text") or "")[:120]
+                            lines.append(f"> 출처: {title} — {excerpt}")
+                    lines.append("")
+
+    return "\n".join(lines)
+
+
 def _normalize_case_insight(parsed: object, fallback: dict[str, object]) -> dict[str, object]:
     if not isinstance(parsed, dict):
         return fallback

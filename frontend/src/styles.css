@@ -109,8 +109,66 @@ p {
 }
 
 .workspace-search-results {
-  max-height: 320px;
+  max-height: 440px;
   overflow-y: auto;
+}
+
+.search-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.search-chip {
+  padding: 3px 10px;
+  border: 1px solid #d8dee8;
+  border-radius: 999px;
+  background: #f0f2f5;
+  color: #344156;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-chip:hover {
+  background: #e4e8ef;
+  border-color: #8aa1b8;
+}
+
+.search-chip.active {
+  background: #244c73;
+  border-color: #244c73;
+  color: #ffffff;
+}
+
+.search-count {
+  margin: 0;
+  font-size: 12px;
+  color: #536174;
+}
+
+.search-load-more {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed #b8cfe8;
+  background: #f4f8fc;
+  color: #244c73;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.search-load-more:hover {
+  background: #e8f0fb;
+  border-color: #244c73;
+}
+
+mark {
+  background: #fff3a8;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
 }
 
 .workspace-search-results button {

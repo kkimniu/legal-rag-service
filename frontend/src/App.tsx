@@ -42,7 +42,7 @@ import {
   type ChatMessage,
   type ChatSession,
 } from './api/chat';
-import { searchPersonalWorkspace, type PersonalSearchResult } from './api/search';
+import { searchPersonalWorkspace, type PersonalSearchResult, type SearchTypeFilter } from './api/search';
 
 const domainOptions = [
   { value: '', label: '전체 분야' },
@@ -144,14 +144,38 @@ function isTaskImminent(task: CaseTask) {
   return task.due_date > today && task.due_date <= sevenDaysLater;
 }
 
+const SEARCH_TYPE_LABELS: Record<PersonalSearchResult['result_type'], string> = {
+  case: '사건',
+  note: '메모',
+  task: '할 일',
+  attachment: '첨부자료',
+  chat: '채팅',
+};
+
+const SEARCH_TYPE_FILTERS: Array<{ value: SearchTypeFilter; label: string }> = [
+  { value: 'all', label: '전체' },
+  { value: 'case', label: '사건' },
+  { value: 'note', label: '메모' },
+  { value: 'task', label: '할 일' },
+  { value: 'attachment', label: '첨부' },
+  { value: 'chat', label: '채팅' },
+];
+
 function searchResultTypeLabel(resultType: PersonalSearchResult['result_type']) {
-  return {
-    case: '사건',
-    note: '메모',
-    task: '할 일',
-    attachment: '첨부자료',
-    chat: '채팅',
-  }[resultType];
+  return SEARCH_TYPE_LABELS[resultType];
+}
+
+const SEARCH_PAGE_SIZE = 8;
+
+function highlightQuery(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === query.toLowerCase()
+      ? <mark key={i}>{part}</mark>
+      : part
+  );
 }
 
 function timelineTypeLabel(activityType: CaseTimelineItem['activity_type']) {
@@ -208,6 +232,9 @@ export function App() {
   const [chatStatus, setChatStatus] = useState('로그인하면 대화형 RAG 챗봇을 사용할 수 있습니다.');
   const [workspaceSearch, setWorkspaceSearch] = useState('');
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<PersonalSearchResult[]>([]);
+  const [workspaceSearchTotalCount, setWorkspaceSearchTotalCount] = useState(0);
+  const [searchTypeFilter, setSearchTypeFilter] = useState<SearchTypeFilter>('all');
+  const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
@@ -364,11 +391,25 @@ export function App() {
     const query = workspaceSearch.trim();
     if (query.length < 2) {
       setWorkspaceSearchResults([]);
+      setWorkspaceSearchTotalCount(0);
       return;
     }
-
     setIsWorkspaceSearching(true);
-    setWorkspaceSearchResults(await searchPersonalWorkspace(query));
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
+    const { results, totalCount } = await searchPersonalWorkspace(query, searchTypeFilter);
+    setWorkspaceSearchResults(results);
+    setWorkspaceSearchTotalCount(totalCount);
+    setIsWorkspaceSearching(false);
+  }
+
+  async function handleSearchTypeChange(type: SearchTypeFilter) {
+    setSearchTypeFilter(type);
+    setSearchVisibleCount(SEARCH_PAGE_SIZE);
+    if (workspaceSearch.trim().length < 2) return;
+    setIsWorkspaceSearching(true);
+    const { results, totalCount } = await searchPersonalWorkspace(workspaceSearch.trim(), type);
+    setWorkspaceSearchResults(results);
+    setWorkspaceSearchTotalCount(totalCount);
     setIsWorkspaceSearching(false);
   }
 
@@ -913,19 +954,47 @@ export function App() {
                   </button>
                 </div>
               </form>
-              {workspaceSearchResults.length > 0 && (
+              {(workspaceSearchResults.length > 0 || workspaceSearchTotalCount > 0) && (
                 <div className="workspace-search-results" aria-label="통합 검색 결과">
-                  {workspaceSearchResults.map((result) => (
+                  <div className="search-filter-chips" role="group" aria-label="유형 필터">
+                    {SEARCH_TYPE_FILTERS.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={searchTypeFilter === value ? 'search-chip active' : 'search-chip'}
+                        onClick={() => handleSearchTypeChange(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="search-count">
+                    총 {workspaceSearchTotalCount}건
+                    {workspaceSearchTotalCount > searchVisibleCount && ` (${searchVisibleCount}건 표시 중)`}
+                  </p>
+                  {workspaceSearchResults.slice(0, searchVisibleCount).map((result) => (
                     <button
                       type="button"
                       key={`${result.result_type}-${result.id}`}
                       onClick={() => handleSelectSearchResult(result)}
                     >
                       <span>{searchResultTypeLabel(result.result_type)}</span>
-                      <strong>{result.title}</strong>
-                      <p>{result.snippet}</p>
+                      <strong>{highlightQuery(result.title, workspaceSearch)}</strong>
+                      <p>{highlightQuery(result.snippet, workspaceSearch)}</p>
                     </button>
                   ))}
+                  {searchVisibleCount < workspaceSearchResults.length && (
+                    <button
+                      type="button"
+                      className="search-load-more"
+                      onClick={() => setSearchVisibleCount((n) => n + SEARCH_PAGE_SIZE)}
+                    >
+                      더 보기 ({workspaceSearchResults.length - searchVisibleCount}건 남음)
+                    </button>
+                  )}
+                  {workspaceSearchResults.length === 0 && (
+                    <p className="empty-state">검색 결과가 없습니다.</p>
+                  )}
                 </div>
               )}
             </section>

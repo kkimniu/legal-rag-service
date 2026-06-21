@@ -107,7 +107,7 @@ describe('App', () => {
     mockedFetchChatSessions.mockResolvedValue([]);
     mockedFetchChatMessages.mockResolvedValue([]);
     mockedFetchChatSession.mockResolvedValue(null);
-    mockedSearchPersonalWorkspace.mockResolvedValue([]);
+    mockedSearchPersonalWorkspace.mockResolvedValue({ results: [], totalCount: 0 });
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
@@ -631,17 +631,20 @@ describe('App', () => {
       last_message_preview: '보증금 반환 상담',
     };
     mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'search@example.com', is_active: true });
-    mockedSearchPersonalWorkspace.mockResolvedValue([
-      {
-        result_type: 'chat',
-        id: 33,
-        case_id: null,
-        session_id: 99,
-        title: olderSession.title,
-        snippet: '보증금 반환 상담 내용',
-        occurred_at: olderSession.updated_at,
-      },
-    ]);
+    mockedSearchPersonalWorkspace.mockResolvedValue({
+      results: [
+        {
+          result_type: 'chat',
+          id: 33,
+          case_id: null,
+          session_id: 99,
+          title: olderSession.title,
+          snippet: '보증금 반환 상담 내용',
+          occurred_at: olderSession.updated_at,
+        },
+      ],
+      totalCount: 1,
+    });
     mockedFetchChatSession.mockResolvedValue(olderSession);
 
     render(<App />);

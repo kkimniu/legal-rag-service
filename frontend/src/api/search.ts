@@ -12,20 +12,28 @@ export type PersonalSearchResult = {
   occurred_at: string;
 };
 
+export type SearchTypeFilter = 'all' | PersonalSearchResult['result_type'];
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
 
-export async function searchPersonalWorkspace(query: string): Promise<PersonalSearchResult[]> {
+export async function searchPersonalWorkspace(
+  query: string,
+  resultType?: SearchTypeFilter,
+): Promise<{ results: PersonalSearchResult[]; totalCount: number }> {
   const normalized = query.trim();
-  if (normalized.length < 2) return [];
+  if (normalized.length < 2) return { results: [], totalCount: 0 };
   try {
-    const response = await api.get<{ query: string; results: PersonalSearchResult[] }>('/search', {
-      headers: await getAuthHeaders(),
-      params: { q: normalized },
-    });
-    return response.data.results;
+    const params: Record<string, string | number> = { q: normalized, limit: 100 };
+    if (resultType && resultType !== 'all') params.result_type = resultType;
+    const response = await api.get<{
+      query: string;
+      results: PersonalSearchResult[];
+      total_count: number;
+    }>('/search', { headers: await getAuthHeaders(), params });
+    return { results: response.data.results, totalCount: response.data.total_count };
   } catch {
-    return [];
+    return { results: [], totalCount: 0 };
   }
 }

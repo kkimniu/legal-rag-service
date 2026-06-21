@@ -14,6 +14,7 @@ import {
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCaseTasks,
+  fetchCaseTimeline,
   fetchCases,
   fetchUpcomingCaseTasks,
   generateCaseInsight,
@@ -58,6 +59,7 @@ vi.mock('./api/cases', () => ({
   fetchCaseAttachments: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCaseTasks: vi.fn(),
+  fetchCaseTimeline: vi.fn(),
   fetchCases: vi.fn(),
   fetchUpcomingCaseTasks: vi.fn(),
   generateCaseInsight: vi.fn(),
@@ -87,6 +89,7 @@ const mockedDownloadCaseAttachment = vi.mocked(downloadCaseAttachment);
 const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCaseTasks = vi.mocked(fetchCaseTasks);
+const mockedFetchCaseTimeline = vi.mocked(fetchCaseTimeline);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedFetchUpcomingCaseTasks = vi.mocked(fetchUpcomingCaseTasks);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
@@ -109,6 +112,7 @@ describe('App', () => {
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
     mockedFetchCaseTasks.mockResolvedValue([]);
+    mockedFetchCaseTimeline.mockResolvedValue([]);
     mockedFetchUpcomingCaseTasks.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
     mockedIndexCaseAttachment.mockResolvedValue(null);
@@ -565,6 +569,53 @@ describe('App', () => {
     await userEvent.click(deadlineButton);
 
     expect(mockedFetchCaseTasks).toHaveBeenCalledWith(4);
+  });
+
+  it('shows case activity and opens its linked chat', async () => {
+    const legalCase = {
+      id: 4,
+      title: '보증금 반환 사건',
+      summary: '',
+      status: 'active',
+      domain_code: '01_civil_law',
+      created_at: '2026-06-20T09:00:00',
+      updated_at: '2026-06-20T09:00:00',
+      note_count: 0,
+      chat_count: 1,
+    };
+    const linkedSession = {
+      id: 12,
+      title: '보증금 질문',
+      case_id: 4,
+      domain_code: '01_civil_law',
+      is_pinned: false,
+      created_at: '2026-06-20T10:00:00',
+      updated_at: '2026-06-20T10:00:00',
+      message_count: 1,
+      last_message_preview: '보증금을 어떻게 받나요?',
+    };
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'timeline@example.com', is_active: true });
+    mockedFetchCases.mockResolvedValue([legalCase]);
+    mockedFetchChatSessions.mockResolvedValue([linkedSession]);
+    mockedFetchCaseTimeline.mockResolvedValue([
+      {
+        activity_type: 'chat',
+        entity_id: 30,
+        session_id: 12,
+        title: '질문 · 보증금 질문',
+        description: '보증금을 어떻게 받나요?',
+        occurred_at: '2026-06-20T10:00:00',
+      },
+    ]);
+
+    render(<App />);
+
+    const activity = await screen.findByRole('button', { name: /질문 · 보증금 질문/ });
+    mockedFetchChatMessages.mockClear();
+    await userEvent.click(activity);
+
+    expect(mockedFetchCaseTimeline).toHaveBeenCalledWith(4);
+    expect(mockedFetchChatMessages).toHaveBeenCalledWith(12);
   });
 
   it('searches the personal workspace and opens an older chat session', async () => {

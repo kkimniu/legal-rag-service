@@ -17,6 +17,7 @@ from app.schemas.legal_case import (
     CaseTaskCreate,
     CaseTaskRead,
     CaseTaskUpdate,
+    CaseTimelineItemRead,
     LegalCaseCreate,
     LegalCaseRead,
     LegalCaseUpdate,
@@ -52,6 +53,7 @@ from app.services.case_task_service import (
     list_upcoming_case_tasks,
     update_case_task,
 )
+from app.services.case_timeline_service import list_case_timeline
 
 router = APIRouter()
 
@@ -331,6 +333,20 @@ def read_tasks(
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
     return [task_read(task) for task in list_case_tasks(db, legal_case.id)]
+
+
+@router.get("/{case_id}/timeline", response_model=list[CaseTimelineItemRead])
+def read_case_timeline(
+    case_id: int,
+    limit: int = Query(default=50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CaseTimelineItemRead]:
+    """Return recent notes, tasks, attachments, and chat activity for one owned matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return [CaseTimelineItemRead(**item) for item in list_case_timeline(db, legal_case, limit)]
 
 
 @router.get("/tasks/upcoming", response_model=list[UpcomingCaseTaskRead])

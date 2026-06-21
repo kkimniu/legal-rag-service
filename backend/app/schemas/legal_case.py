@@ -118,3 +118,14 @@ class UpcomingCaseTaskRead(CaseTaskRead):
     """Incomplete dated task enriched with its legal matter title."""
 
     case_title: str
+
+
+class CaseTimelineItemRead(BaseModel):
+    """One activity item aggregated from an owned legal matter."""
+
+    activity_type: Literal["case", "note", "task", "attachment", "chat"]
+    entity_id: int
+    session_id: int | None = None
+    title: str
+    description: str
+    occurred_at: str

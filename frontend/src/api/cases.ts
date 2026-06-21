@@ -60,6 +60,15 @@ export type UpcomingCaseTask = CaseTask & {
   case_title: string;
 };
 
+export type CaseTimelineItem = {
+  activity_type: 'case' | 'note' | 'task' | 'attachment' | 'chat';
+  entity_id: number;
+  session_id?: number | null;
+  title: string;
+  description: string;
+  occurred_at: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -177,6 +186,17 @@ export async function fetchUpcomingCaseTasks(days = 30): Promise<UpcomingCaseTas
     const response = await api.get<UpcomingCaseTask[]>('/cases/tasks/upcoming', {
       headers: await getAuthHeaders(),
       params: { days },
+    });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchCaseTimeline(caseId: number): Promise<CaseTimelineItem[]> {
+  try {
+    const response = await api.get<CaseTimelineItem[]>(`/cases/${caseId}/timeline`, {
+      headers: await getAuthHeaders(),
     });
     return response.data;
   } catch {

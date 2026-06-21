@@ -464,7 +464,8 @@ button:disabled {
 .case-overview div,
 .case-recent-note,
 .case-linked-sessions,
-.case-attachments {
+.case-attachments,
+.case-timeline {
   border: 1px solid #d8dee8;
   border-radius: 8px;
   background: #ffffff;
@@ -553,7 +554,9 @@ button:disabled {
 .case-linked-sessions,
 .case-recent-note,
 .case-attachments,
-.case-tasks {
+.case-tasks,
+.case-timeline,
+.case-timeline-list {
   display: grid;
   gap: 8px;
 }
@@ -561,10 +564,73 @@ button:disabled {
 .case-linked-sessions h4,
 .case-recent-note h4,
 .case-attachments h4,
-.case-tasks h4 {
+.case-tasks h4,
+.case-timeline h4 {
   margin: 0;
   color: #172033;
   font-size: 13px;
+}
+
+.case-timeline-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-timeline-heading button {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.case-timeline-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.case-timeline-list button {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  width: 100%;
+  border-left: 3px solid #719186;
+  border-radius: 0;
+  background: transparent;
+  color: #172033;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.case-timeline-list button:hover:not(:disabled) {
+  background: #eef5f2;
+}
+
+.case-timeline-list button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.case-timeline-list span,
+.case-timeline-list time {
+  color: #536174;
+  font-size: 11px;
+}
+
+.case-timeline-list strong,
+.case-timeline-list p {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.case-timeline-list strong {
+  font-size: 13px;
+}
+
+.case-timeline-list p {
+  color: #364456;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .case-tasks {

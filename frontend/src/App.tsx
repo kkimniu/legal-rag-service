@@ -11,6 +11,7 @@ import {
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCaseTasks,
+  fetchCaseTimeline,
   fetchCases,
   fetchUpcomingCaseTasks,
   generateCaseInsight,
@@ -24,6 +25,7 @@ import {
   type CaseNote,
   type CaseStatus,
   type CaseTask,
+  type CaseTimelineItem,
   type LegalCase,
   type UpcomingCaseTask,
 } from './api/cases';
@@ -134,6 +136,16 @@ function searchResultTypeLabel(resultType: PersonalSearchResult['result_type']) 
   }[resultType];
 }
 
+function timelineTypeLabel(activityType: CaseTimelineItem['activity_type']) {
+  return {
+    case: '사건',
+    note: '메모',
+    task: '할 일',
+    attachment: '첨부자료',
+    chat: '채팅',
+  }[activityType];
+}
+
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
@@ -151,6 +163,8 @@ export function App() {
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
   const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
   const [caseTasks, setCaseTasks] = useState<CaseTask[]>([]);
+  const [caseTimeline, setCaseTimeline] = useState<CaseTimelineItem[]>([]);
+  const [isTimelineLoading, setIsTimelineLoading] = useState(false);
   const [upcomingTasks, setUpcomingTasks] = useState<UpcomingCaseTask[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
@@ -253,6 +267,7 @@ export function App() {
       setCaseNotes(await fetchCaseNotes(nextCases[0].id));
       setCaseAttachments(await fetchCaseAttachments(nextCases[0].id));
       setCaseTasks(await fetchCaseTasks(nextCases[0].id));
+      setCaseTimeline(await fetchCaseTimeline(nextCases[0].id));
     }
   }
 
@@ -271,6 +286,7 @@ export function App() {
       setCaseNotes(nextCases[0] ? await fetchCaseNotes(nextCases[0].id) : []);
       setCaseAttachments(nextCases[0] ? await fetchCaseAttachments(nextCases[0].id) : []);
       setCaseTasks(nextCases[0] ? await fetchCaseTasks(nextCases[0].id) : []);
+      setCaseTimeline(nextCases[0] ? await fetchCaseTimeline(nextCases[0].id) : []);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
@@ -294,6 +310,7 @@ export function App() {
     setCaseNotes([]);
     setCaseAttachments([]);
     setCaseTasks([]);
+    setCaseTimeline([]);
     setUpcomingTasks([]);
     setCaseInsight(null);
     setNoteTitle('');
@@ -350,6 +367,15 @@ export function App() {
     setChatStatus('통합 검색 결과를 열었습니다.');
   }
 
+  async function handleSelectTimelineItem(item: CaseTimelineItem) {
+    if (!item.session_id) return;
+    const session = sessions.find((candidate) => candidate.id === item.session_id)
+      ?? await fetchChatSession(item.session_id);
+    if (!session) return;
+    setSessions((current) => current.some((candidate) => candidate.id === session.id) ? current : [session, ...current]);
+    await handleSelectSession(session);
+  }
+
   function handleStartCaseChat() {
     if (!activeCase) return;
     setActiveSession(null);
@@ -384,7 +410,14 @@ export function App() {
     }
     setActiveCase(updatedCase);
     setCases((items) => items.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
+    await refreshCaseTimeline(updatedCase.id);
     setChatStatus(`사건 상태를 ${caseStatusLabel(updatedCase.status)} 상태로 변경했습니다.`);
+  }
+
+  async function refreshCaseTimeline(caseId: number) {
+    setIsTimelineLoading(true);
+    setCaseTimeline(await fetchCaseTimeline(caseId));
+    setIsTimelineLoading(false);
   }
 
   async function handleSelectCase(legalCase: LegalCase) {
@@ -394,9 +427,16 @@ export function App() {
     setNoteTitle('');
     setNoteContent('');
     setFilterSessionsByCase(true);
-    setCaseNotes(await fetchCaseNotes(legalCase.id));
-    setCaseAttachments(await fetchCaseAttachments(legalCase.id));
-    setCaseTasks(await fetchCaseTasks(legalCase.id));
+    const [notes, attachments, tasks, timeline] = await Promise.all([
+      fetchCaseNotes(legalCase.id),
+      fetchCaseAttachments(legalCase.id),
+      fetchCaseTasks(legalCase.id),
+      fetchCaseTimeline(legalCase.id),
+    ]);
+    setCaseNotes(notes);
+    setCaseAttachments(attachments);
+    setCaseTasks(tasks);
+    setCaseTimeline(timeline);
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
 
@@ -454,6 +494,16 @@ export function App() {
     setCaseNotes([]);
     setCaseAttachments([]);
     setCaseTasks([]);
+    setCaseTimeline([
+      {
+        activity_type: 'case',
+        entity_id: legalCase.id,
+        session_id: null,
+        title: '사건 생성',
+        description: legalCase.title,
+        occurred_at: legalCase.created_at,
+      },
+    ]);
     setCaseTitle('');
     setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
@@ -486,6 +536,7 @@ export function App() {
     setNoteContent('');
     setEditingNoteId(null);
     setCaseInsight(null);
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus(editingNoteId ? '사건 메모를 수정했습니다.' : '사건 메모를 저장했습니다.');
   }
 
@@ -499,6 +550,7 @@ export function App() {
     }
     setCaseTasks((items) => sortCaseTasks([...items, task]));
     setUpcomingTasks(await fetchUpcomingCaseTasks());
+    await refreshCaseTimeline(activeCase.id);
     setTaskTitle('');
     setTaskDueDate('');
     setChatStatus('사건 할 일을 추가했습니다.');
@@ -513,6 +565,7 @@ export function App() {
     }
     setCaseTasks((items) => sortCaseTasks(items.map((item) => (item.id === updated.id ? updated : item))));
     setUpcomingTasks(await fetchUpcomingCaseTasks());
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus(updated.is_completed ? '사건 할 일을 완료 처리했습니다.' : '사건 할 일을 다시 진행 상태로 변경했습니다.');
   }
 
@@ -525,6 +578,7 @@ export function App() {
     }
     setCaseTasks((items) => items.filter((item) => item.id !== task.id));
     setUpcomingTasks(await fetchUpcomingCaseTasks());
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus('사건 할 일을 삭제했습니다.');
   }
 
@@ -568,6 +622,7 @@ export function App() {
       setNoteContent('');
     }
     setCaseInsight(null);
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus('사건 메모를 삭제했습니다.');
   }
 
@@ -608,6 +663,7 @@ export function App() {
     setCases((items) => items.map((item) => (item.id === activeCase.id ? { ...item, updated_at: now } : item)));
     setActiveCase((item) => (item && item.id === activeCase.id ? { ...item, updated_at: now } : item));
     setCaseInsight(null);
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus('첨부자료를 추가했습니다.');
   }
 
@@ -620,6 +676,7 @@ export function App() {
     }
     setCaseAttachments((items) => items.filter((item) => item.id !== attachment.id));
     setCaseInsight(null);
+    await refreshCaseTimeline(activeCase.id);
     setChatStatus('첨부자료를 삭제했습니다.');
   }
 
@@ -709,6 +766,7 @@ export function App() {
     ]);
     setActiveSession(turn.session);
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
+    if (turn.session.case_id) await refreshCaseTimeline(turn.session.case_id);
     setChatStatus(turn.is_ready ? 'RAG 답변이 생성되었습니다.' : 'RAG 준비가 필요합니다.');
     setIsLoading(false);
   }
@@ -945,6 +1003,38 @@ export function App() {
                     </div>
                   </dl>
                   {activeCase.summary && <p className="case-summary">{activeCase.summary}</p>}
+                  <section className="case-timeline">
+                    <div className="case-timeline-heading">
+                      <h4>최근 활동</h4>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => refreshCaseTimeline(activeCase.id)}
+                        disabled={isTimelineLoading}
+                      >
+                        {isTimelineLoading ? '불러오는 중' : '새로고침'}
+                      </button>
+                    </div>
+                    {caseTimeline.length > 0 ? (
+                      <div className="case-timeline-list">
+                        {caseTimeline.slice(0, 12).map((item) => (
+                          <button
+                            type="button"
+                            key={`${item.activity_type}-${item.entity_id}`}
+                            onClick={() => handleSelectTimelineItem(item)}
+                            disabled={!item.session_id}
+                          >
+                            <span>{timelineTypeLabel(item.activity_type)}</span>
+                            <strong>{item.title}</strong>
+                            <p>{item.description}</p>
+                            <time>{new Date(item.occurred_at).toLocaleString('ko-KR')}</time>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-state">아직 기록된 활동이 없습니다.</p>
+                    )}
+                  </section>
                   {caseInsight && (
                     <section className="case-insight">
                       <h4>AI 사건 정리</h4>

@@ -882,9 +882,11 @@ summary {
   -webkit-line-clamp: unset;
 }
 
-.source-expand-btn {
+.source-expand-btn,
+.source-download-btn {
   display: inline-block;
   margin-top: 6px;
+  margin-right: 6px;
   padding: 2px 10px;
   border: 1px solid #c5cdd8;
   border-radius: 999px;
@@ -895,7 +897,8 @@ summary {
   cursor: pointer;
 }
 
-.source-expand-btn:hover {
+.source-expand-btn:hover,
+.source-download-btn:hover {
   background: #eef2f6;
 }
 

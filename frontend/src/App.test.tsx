@@ -8,6 +8,7 @@ import {
   createCaseNote,
   deleteCaseAttachment,
   deleteCaseNote,
+  downloadCaseAttachment,
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCases,
@@ -40,6 +41,7 @@ vi.mock('./api/cases', () => ({
   createCaseNote: vi.fn(),
   deleteCaseAttachment: vi.fn(),
   deleteCaseNote: vi.fn(),
+  downloadCaseAttachment: vi.fn(),
   fetchCaseAttachments: vi.fn(),
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
@@ -62,6 +64,7 @@ const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
 const mockedDeleteCaseAttachment = vi.mocked(deleteCaseAttachment);
 const mockedDeleteCaseNote = vi.mocked(deleteCaseNote);
+const mockedDownloadCaseAttachment = vi.mocked(downloadCaseAttachment);
 const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
@@ -86,6 +89,7 @@ describe('App', () => {
     mockedUploadCaseAttachment.mockResolvedValue(null);
     mockedDeleteCaseAttachment.mockResolvedValue(false);
     mockedDeleteCaseNote.mockResolvedValue(false);
+    mockedDownloadCaseAttachment.mockResolvedValue(false);
     mockedUpdateCaseStatus.mockResolvedValue(null);
   });
 
@@ -255,6 +259,7 @@ describe('App', () => {
       created_at: '2026-06-14T12:05:00',
     });
     mockedDeleteCaseAttachment.mockResolvedValue(true);
+    mockedDownloadCaseAttachment.mockResolvedValue(true);
 
     render(<App />);
 
@@ -270,6 +275,8 @@ describe('App', () => {
 
     expect(mockedUploadCaseAttachment).toHaveBeenCalledWith(3, attachment);
     expect(await screen.findByText('contract.txt')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '다운로드' }));
+    expect(mockedDownloadCaseAttachment).toHaveBeenCalledWith(3, 9, 'contract.txt');
     await userEvent.click(screen.getByRole('button', { name: 'contract.txt 첨부 삭제' }));
 
     expect(mockedDeleteCaseAttachment).toHaveBeenCalledWith(3, 9);

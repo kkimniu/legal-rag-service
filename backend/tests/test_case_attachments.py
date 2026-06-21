@@ -107,3 +107,32 @@ def test_case_attachment_can_be_reindexed(client: TestClient, monkeypatch, tmp_p
     assert response.status_code == 200
     assert response.json()["vector_status"] == "completed"
     assert response.json()["vector_chunk_count"] == 1
+
+
+def test_case_attachment_download_requires_case_ownership(client: TestClient, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(settings, "upload_directory", str(tmp_path / "uploads"))
+    owner_headers = _auth_headers(client, "case-attachment-owner@example.com")
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Download case", "domain_code": "01_civil_law"},
+        headers=owner_headers,
+    )
+    upload_response = client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/attachments",
+        headers=owner_headers,
+        files={"file": ("evidence.txt", b"private evidence", "text/plain")},
+    )
+    download_url = (
+        f"/api/v1/cases/{case_response.json()['id']}"
+        f"/attachments/{upload_response.json()['id']}/download"
+    )
+
+    owner_response = client.get(download_url, headers=owner_headers)
+    other_headers = _auth_headers(client, "case-attachment-other@example.com")
+    other_response = client.get(download_url, headers=other_headers)
+
+    assert owner_response.status_code == 200
+    assert owner_response.content == b"private evidence"
+    assert owner_response.headers["content-type"].startswith("text/plain")
+    assert "evidence.txt" in owner_response.headers["content-disposition"]
+    assert other_response.status_code == 404

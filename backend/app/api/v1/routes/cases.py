@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -262,3 +265,28 @@ def index_attachment(
     if attachment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
     return attachment_read(index_case_attachment(db, legal_case, attachment))
+
+
+@router.get("/{case_id}/attachments/{attachment_id}/download", response_class=FileResponse)
+def download_attachment(
+    case_id: int,
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    """Download one attachment only when the current user owns its legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    attachment = get_case_attachment(db, legal_case.id, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+
+    storage_path = Path(attachment.storage_path)
+    if not storage_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file was not found.")
+    return FileResponse(
+        path=storage_path,
+        media_type=attachment.content_type or "application/octet-stream",
+        filename=attachment.original_filename,
+    )

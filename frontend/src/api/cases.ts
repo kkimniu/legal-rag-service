@@ -175,6 +175,30 @@ export async function indexCaseAttachment(caseId: number, attachmentId: number):
   }
 }
 
+export async function downloadCaseAttachment(
+  caseId: number,
+  attachmentId: number,
+  filename: string,
+): Promise<boolean> {
+  try {
+    const response = await api.get<Blob>(`/cases/${caseId}/attachments/${attachmentId}/download`, {
+      headers: await getAuthHeaders(),
+      responseType: 'blob',
+    });
+    const objectUrl = URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteCaseAttachment(caseId: number, attachmentId: number): Promise<boolean> {
   try {
     await api.delete(`/cases/${caseId}/attachments/${attachmentId}`, { headers: await getAuthHeaders() });

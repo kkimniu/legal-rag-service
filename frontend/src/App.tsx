@@ -5,6 +5,7 @@ import {
   createCaseNote,
   deleteCaseAttachment,
   deleteCaseNote,
+  downloadCaseAttachment,
   fetchCaseAttachments,
   fetchCaseNotes,
   fetchCases,
@@ -86,6 +87,18 @@ function evidenceBadgeClass(source: ChatMessage['sources'][number]) {
 function caseNumber(source: ChatMessage['sources'][number]) {
   const value = source.metadata.meta_case_number ?? source.metadata.case_number;
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function attachmentReference(source: ChatMessage['sources'][number]) {
+  if (source.metadata.evidence_type !== 'case_attachment') return null;
+  const caseId = Number(source.metadata.case_id);
+  const attachmentId = Number(source.metadata.attachment_id);
+  if (!Number.isInteger(caseId) || !Number.isInteger(attachmentId)) return null;
+  return {
+    caseId,
+    attachmentId,
+    filename: source.title ?? `attachment-${attachmentId}`,
+  };
 }
 
 export function App() {
@@ -484,6 +497,11 @@ export function App() {
     setChatStatus('첨부자료를 삭제했습니다.');
   }
 
+  async function handleDownloadCaseAttachment(caseId: number, attachmentId: number, filename: string) {
+    const downloaded = await downloadCaseAttachment(caseId, attachmentId, filename);
+    setChatStatus(downloaded ? '첨부자료 다운로드를 시작했습니다.' : '첨부자료를 다운로드하지 못했습니다.');
+  }
+
   async function handleIndexCaseAttachment(attachment: CaseAttachment) {
     if (!activeCase || indexingAttachmentId !== null) return;
     setIndexingAttachmentId(attachment.id);
@@ -809,6 +827,13 @@ export function App() {
                               </small>
                             </div>
                             <div className="case-attachment-actions">
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => handleDownloadCaseAttachment(activeCase.id, attachment.id, attachment.original_filename)}
+                              >
+                                다운로드
+                              </button>
                               {attachment.extraction_status === 'completed' && attachment.vector_status !== 'completed' && (
                                 <button
                                   type="button"
@@ -1042,6 +1067,7 @@ export function App() {
                           const isLong = source.text.length > 200;
                           const sourceEvidenceLabel = evidenceLabel(source);
                           const sourceCaseNumber = caseNumber(source);
+                          const sourceAttachment = attachmentReference(source);
                           return (
                             <section className="source-item" key={sourceKey}>
                               <div className="source-meta">
@@ -1056,6 +1082,19 @@ export function App() {
                               </div>
                               <h3>{source.title ?? '제목 없음'}</h3>
                               <p className={isExpanded ? 'expanded' : ''}>{source.text}</p>
+                              {sourceAttachment && (
+                                <button
+                                  type="button"
+                                  className="source-download-btn"
+                                  onClick={() => handleDownloadCaseAttachment(
+                                    sourceAttachment.caseId,
+                                    sourceAttachment.attachmentId,
+                                    sourceAttachment.filename,
+                                  )}
+                                >
+                                  원본 다운로드
+                                </button>
+                              )}
                               {isLong && (
                                 <button
                                   type="button"

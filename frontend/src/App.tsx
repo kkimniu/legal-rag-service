@@ -18,6 +18,7 @@ import {
   fetchUpcomingCaseTasks,
   generateCaseInsight,
   indexCaseAttachment,
+  ocrCaseAttachment,
   updateCase,
   updateCaseStatus,
   updateCaseNote,
@@ -39,6 +40,7 @@ import {
   fetchChatSession,
   fetchChatSessions,
   sendChatMessage,
+  streamChatMessage,
   updateChatSessionPin,
   type ChatMessage,
   type ChatSession,
@@ -296,6 +298,7 @@ export function App() {
   const [deletingCaseId, setDeletingCaseId] = useState<number | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [indexingAttachmentId, setIndexingAttachmentId] = useState<number | null>(null);
+  const [ocringAttachmentId, setOcringAttachmentId] = useState<number | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDueDate, setTaskDueDate] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -308,6 +311,7 @@ export function App() {
   const [searchTypeFilter, setSearchTypeFilter] = useState<SearchTypeFilter>('all');
   const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
@@ -369,7 +373,7 @@ export function App() {
     if (typeof messageEndRef.current?.scrollIntoView === 'function') {
       messageEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [messages.length, isLoading]);
+  }, [messages.length, isLoading, streamingContent]);
 
   async function refreshSessions() {
     const nextSessions = await fetchChatSessions();
@@ -879,31 +883,49 @@ export function App() {
     setChatStatus(indexed.vector_status === 'completed' ? '첨부자료 AI 색인을 완료했습니다.' : '첨부자료 AI 색인이 대기 상태입니다.');
   }
 
+  async function handleOcrCaseAttachment(attachment: CaseAttachment) {
+    if (!activeCase || ocringAttachmentId !== null) return;
+    setOcringAttachmentId(attachment.id);
+    const updated = await ocrCaseAttachment(activeCase.id, attachment.id);
+    setOcringAttachmentId(null);
+    if (!updated) {
+      setChatStatus('OCR 텍스트 추출을 완료하지 못했습니다.');
+      return;
+    }
+    setCaseAttachments((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    setChatStatus(updated.extraction_status === 'completed' ? 'OCR 텍스트 추출을 완료했습니다.' : 'OCR 텍스트를 추출하지 못했습니다.');
+  }
+
   async function handleRegenerate() {
     if (!activeSession || isLoading) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastUserMsg) return;
 
     setIsLoading(true);
-    setChatStatus('답변을 재생성하는 중입니다.');
-    const turn = await sendChatMessage(activeSession.id, lastUserMsg.content, answerMode);
+    setStreamingContent('');
+    setChatStatus('법률 근거를 검색하는 중입니다...');
+
+    const turn = await streamChatMessage(activeSession.id, lastUserMsg.content, answerMode, (token) => {
+      setStreamingContent((prev) => prev + token);
+      setChatStatus('답변을 재생성하는 중입니다...');
+    });
+
+    setStreamingContent('');
+    setIsLoading(false);
+
     if (!turn) {
       setChatStatus('재생성에 실패했습니다. 백엔드 서버 상태를 확인해주세요.');
-      setIsLoading(false);
       return;
     }
     setMessages((items) => [...items, turn.user_message, turn.assistant_message]);
     setActiveSession(turn.session);
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
     setChatStatus('답변을 재생성했습니다.');
-    setIsLoading(false);
   }
 
   async function handleMessageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!message.trim()) {
-      return;
-    }
+    if (!message.trim()) return;
 
     let session = activeSession;
     if (!session) {
@@ -917,8 +939,9 @@ export function App() {
     }
 
     const content = message.trim();
+    const tempId = -Date.now();
     const optimisticUserMessage: ChatMessage = {
-      id: -Date.now(),
+      id: tempId,
       role: 'user',
       content,
       answer_mode: answerMode,
@@ -930,18 +953,25 @@ export function App() {
     setMessage('');
     setMessages((items) => [...items, optimisticUserMessage]);
     setIsLoading(true);
-    setChatStatus('검색 근거를 찾고 답변을 생성하는 중입니다.');
+    setStreamingContent('');
+    setChatStatus('법률 근거를 검색하는 중입니다...');
 
-    const turn = await sendChatMessage(session.id, content, answerMode);
+    const turn = await streamChatMessage(session.id, content, answerMode, (token) => {
+      setStreamingContent((prev) => prev + token);
+      setChatStatus('답변을 생성하는 중입니다...');
+    });
+
+    setStreamingContent('');
+    setIsLoading(false);
+
     if (!turn) {
       setChatStatus('챗봇 API에 연결할 수 없습니다. 백엔드 서버 상태를 확인해주세요.');
-      setMessages((items) => items.filter((item) => item.id !== optimisticUserMessage.id));
-      setIsLoading(false);
+      setMessages((items) => items.filter((item) => item.id !== tempId));
       return;
     }
 
     setMessages((items) => [
-      ...items.filter((item) => item.id !== optimisticUserMessage.id),
+      ...items.filter((item) => item.id !== tempId),
       turn.user_message,
       turn.assistant_message,
     ]);
@@ -949,7 +979,6 @@ export function App() {
     setSessions((items) => [turn.session, ...items.filter((item) => item.id !== turn.session.id)]);
     if (turn.session.case_id) await refreshCaseTimeline(turn.session.case_id);
     setChatStatus(turn.is_ready ? 'RAG 답변이 생성되었습니다.' : 'RAG 준비가 필요합니다.');
-    setIsLoading(false);
   }
 
   return (
@@ -1463,6 +1492,7 @@ export function App() {
                         <input
                           type="file"
                           aria-label="첨부 파일"
+                          accept=".pdf,.txt,.md,.csv,.json,.log,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif"
                           onChange={handleUploadCaseAttachment}
                           disabled={isUploadingAttachment}
                         />
@@ -1490,6 +1520,16 @@ export function App() {
                               >
                                 다운로드
                               </button>
+                              {attachment.extraction_status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  onClick={() => handleOcrCaseAttachment(attachment)}
+                                  disabled={ocringAttachmentId !== null}
+                                >
+                                  {ocringAttachmentId === attachment.id ? 'OCR 중' : 'OCR 추출'}
+                                </button>
+                              )}
                               {attachment.extraction_status === 'completed' && attachment.vector_status !== 'completed' && (
                                 <button
                                   type="button"
@@ -1788,6 +1828,18 @@ export function App() {
                 <h2>{currentUser ? '새 질문으로 채팅을 시작하세요' : '로그인 후 채팅을 시작하세요'}</h2>
                 <p>한 채팅 안에서는 이전 질문과 답변이 누적되고, 새 주제는 새 대화에서 다시 시작합니다.</p>
               </div>
+            )}
+            {isLoading && streamingContent && (
+              <article className="message-bubble assistant streaming-message">
+                <span>AI</span>
+                <div className="streaming-text">{streamingContent}<span className="streaming-cursor" /></div>
+              </article>
+            )}
+            {isLoading && !streamingContent && (
+              <article className="message-bubble assistant streaming-message">
+                <span>AI</span>
+                <div className="typing-indicator"><span /><span /><span /></div>
+              </article>
             )}
             <div ref={messageEndRef} />
           </div>

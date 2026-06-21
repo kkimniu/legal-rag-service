@@ -323,6 +323,19 @@ export async function deleteCaseAttachment(caseId: number, attachmentId: number)
   }
 }
 
+export async function ocrCaseAttachment(caseId: number, attachmentId: number): Promise<CaseAttachment | null> {
+  try {
+    const response = await api.post<CaseAttachment>(
+      `/cases/${caseId}/attachments/${attachmentId}/ocr`,
+      null,
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
 export async function downloadCaseReport(caseId: number, caseTitle: string): Promise<boolean> {
   try {
     const response = await api.get<Blob>(`/cases/${caseId}/report`, {

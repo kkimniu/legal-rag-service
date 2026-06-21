@@ -40,6 +40,7 @@ from app.services.legal_case_service import (
     list_case_attachments,
     list_case_notes,
     list_legal_cases,
+    ocr_case_attachment,
     update_case_note,
     update_legal_case,
     update_legal_case_status,
@@ -314,6 +315,26 @@ def index_attachment(
     if attachment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
     return attachment_read(index_case_attachment(db, legal_case, attachment))
+
+
+@router.post("/{case_id}/attachments/{attachment_id}/ocr", response_model=CaseAttachmentRead)
+def run_attachment_ocr(
+    case_id: int,
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseAttachmentRead:
+    """Re-extract text from a case attachment using OCR."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    attachment = get_case_attachment(db, legal_case.id, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+    updated = ocr_case_attachment(db, attachment)
+    if updated.extraction_status == "completed" and updated.extracted_text:
+        updated = index_case_attachment(db, legal_case, updated)
+    return attachment_read(updated)
 
 
 @router.get("/{case_id}/attachments/{attachment_id}/download", response_class=FileResponse)

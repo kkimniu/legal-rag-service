@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 import re
 from typing import Any
@@ -151,6 +152,127 @@ class RagService:
             evidence_status=evidence_status,
             evidence_warnings=evidence_warnings,
         )
+
+    def prepare_rag(
+        self,
+        question: str,
+        domain_code: str | None = None,
+        chat_history: list[tuple[str, str]] | None = None,
+        answer_mode: str = "general",
+        case_context: str | None = None,
+        case_id: int | None = None,
+    ) -> RagAskResponse:
+        """Retrieval only. Returns partial RagAskResponse; empty answer means streaming should follow."""
+        if not settings.openai_api_key or str(settings.openai_api_key).startswith("replace-"):
+            return RagAskResponse(
+                answer="OpenAI API 키가 아직 설정되지 않아 RAG 검색을 실행할 수 없습니다.",
+                sources=[],
+                is_ready=False,
+            )
+        persist_directory = self._resolve_chroma_directory()
+        if persist_directory is None:
+            return RagAskResponse(
+                answer="ChromaDB 인덱스가 아직 생성되지 않았습니다.",
+                sources=[],
+                is_ready=False,
+            )
+        try:
+            retrieval_question = self._build_retrieval_question(question, chat_history or [], case_context=case_context)
+            sources = self._retrieve_sources(retrieval_question, question, persist_directory, domain_code, case_id=case_id)
+        except Exception as exc:
+            return RagAskResponse(answer=f"RAG 검색 중 오류가 발생했습니다: {exc}", sources=[], is_ready=False)
+        if not sources:
+            return RagAskResponse(
+                answer="질문과 관련된 법률 또는 판례 근거를 찾지 못했습니다.",
+                sources=[],
+                is_ready=True,
+                evidence_status="none",
+                evidence_warnings=["검색된 법령 또는 판례 근거가 없습니다."],
+            )
+        reliable_sources, evidence_status, evidence_warnings = self._assess_sources(sources)
+        if not reliable_sources:
+            return RagAskResponse(
+                answer=self._insufficient_evidence_answer(evidence_warnings),
+                sources=sources,
+                is_ready=True,
+                evidence_status=evidence_status,
+                evidence_warnings=evidence_warnings,
+            )
+        # Empty answer signals the caller to stream generation
+        return RagAskResponse(
+            answer="",
+            sources=reliable_sources,
+            is_ready=True,
+            evidence_status=evidence_status,
+            evidence_warnings=evidence_warnings,
+        )
+
+    def stream_generation(
+        self,
+        question: str,
+        sources: list[RagSource],
+        chat_history: list[tuple[str, str]] | None = None,
+        answer_mode: str = "general",
+        evidence_warnings: list[str] | None = None,
+        case_context: str | None = None,
+    ) -> Iterator[str]:
+        """Yield LLM tokens for the given question and pre-retrieved sources."""
+        model = ChatOpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=settings.openai_temperature,
+        )
+        context = self._format_context(sources)
+        conversation_context = self._format_chat_history(chat_history or [])
+        mode_instruction = self._answer_mode_instruction(answer_mode)
+        evidence_warning_text = self._format_evidence_warnings(evidence_warnings or [])
+        personal_case_context = self._format_case_context(case_context)
+        messages = [
+            SystemMessage(
+                content=(
+                    "당신은 한국 법률 상담을 돕는 AI 어시스턴트입니다. "
+                    "반드시 제공된 법률 근거와 판례 근거 안에서만 답변하세요. "
+                    "근거에 없는 법률요건, 판례 취지, 법적 결론은 절대 추측하지 말고 "
+                    "근거 부족임을 명확히 밝히세요.\n\n"
+                    "답변 원칙:\n"
+                    "1. 검색된 근거에 없는 내용은 '근거 없음'으로 명시\n"
+                    "2. 조문 번호(예: 민법 제750조)와 판례 사건번호를 정확히 인용\n"
+                    "3. 법률 용어는 정확하게 사용하되 일반인이 이해할 수 있도록 설명 추가\n"
+                    "4. 사실관계가 불명확할 때는 판단 유보 후 확인 필요 사항 제시\n"
+                    "5. 이 답변은 법률 자문이 아닌 참고 정보임을 반드시 명시\n\n"
+                    "답변 형식 (반드시 준수):\n"
+                    "답변 요약\n"
+                    "[핵심 결론을 2~4문장으로 요약]\n\n"
+                    "관련 법령\n"
+                    "- 법령명 및 조문: ...\n"
+                    "- 적용 근거: ...\n\n"
+                    "관련 판례\n"
+                    "- 사건번호: ...\n"
+                    "- 법원/선고일: ...\n"
+                    "- 판결 요지: ...\n\n"
+                    "주의사항\n"
+                    "[한계, 추가 확인 필요 사항, 전문가 상담 권고]"
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"최근 대화\n{conversation_context}\n\n"
+                    f"개인 사건 메모\n{personal_case_context}\n\n"
+                    f"답변 모드\n{mode_instruction}\n\n"
+                    f"근거 품질 경고\n{evidence_warning_text}\n\n"
+                    f"질문:\n{question}\n\n"
+                    f"검색된 근거:\n{context}\n\n"
+                    "위 검색된 근거만 사용해서 한국어로 답변하세요. "
+                    "관련 판례가 없으면 '관련 판례\\n- 검색된 판례 근거가 부족합니다.'라고 쓰세요. "
+                    "관련 법령이 없으면 '관련 법령\\n- 검색된 법령 근거가 부족합니다.'라고 쓰세요. "
+                    "근거에 없는 내용을 임의로 추가하지 마세요."
+                )
+            ),
+        ]
+        for chunk in model.stream(messages):
+            content = chunk.content
+            if content:
+                yield str(content)
 
     def _expand_query(self, question: str, keywords: list[str]) -> list[str]:
         """키워드에 매칭되는 법률 동의어를 모아 확장 검색어 목록을 반환한다.

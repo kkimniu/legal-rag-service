@@ -153,17 +153,23 @@ class RagService:
         )
 
     def _expand_query(self, question: str, keywords: list[str]) -> list[str]:
-        """키워드에 매칭되는 법률 동의어를 모아 확장 검색어 목록을 반환한다."""
+        """키워드에 매칭되는 법률 동의어를 모아 확장 검색어 목록을 반환한다.
+        정확한 키를 우선 매칭하고, 없으면 부분 일치로 폴백한다."""
         expanded: list[str] = []
         seen: set[str] = set()
         for keyword in keywords:
-            for synonym_key, synonyms in _LEGAL_SYNONYMS.items():
-                if keyword in synonym_key or synonym_key in keyword:
-                    for term in synonyms:
-                        if term not in seen:
-                            expanded.append(term)
-                            seen.add(term)
-                    break
+            if keyword in _LEGAL_SYNONYMS:
+                matched_synonyms = _LEGAL_SYNONYMS[keyword]
+            else:
+                matched_synonyms = next(
+                    (synonyms for key, synonyms in _LEGAL_SYNONYMS.items()
+                     if keyword in key or key in keyword),
+                    [],
+                )
+            for term in matched_synonyms:
+                if term not in seen:
+                    expanded.append(term)
+                    seen.add(term)
         return expanded
 
     def _build_retrieval_question(

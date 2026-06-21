@@ -312,6 +312,7 @@ export function App() {
   const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
@@ -894,6 +895,12 @@ export function App() {
     }
     setCaseAttachments((items) => items.map((item) => (item.id === updated.id ? updated : item)));
     setChatStatus(updated.extraction_status === 'completed' ? 'OCR 텍스트 추출을 완료했습니다.' : 'OCR 텍스트를 추출하지 못했습니다.');
+  }
+
+  async function handleCopyMessage(id: number, content: string) {
+    await navigator.clipboard.writeText(content);
+    setCopiedMessageId(id);
+    setTimeout(() => setCopiedMessageId((prev) => (prev === id ? null : prev)), 2000);
   }
 
   async function handleRegenerate() {
@@ -1815,10 +1822,21 @@ export function App() {
                       </div>
                     </details>
                   )}
-                  {isLastAssistant && !isLoading && (
-                    <button type="button" className="regenerate-btn" onClick={handleRegenerate}>
-                      ↺ 재생성
-                    </button>
+                  {item.role === 'assistant' && (
+                    <div className="message-actions">
+                      <button
+                        type="button"
+                        className={`copy-btn${copiedMessageId === item.id ? ' copied' : ''}`}
+                        onClick={() => handleCopyMessage(item.id, item.content)}
+                      >
+                        {copiedMessageId === item.id ? '✓ 복사됨' : '복사'}
+                      </button>
+                      {isLastAssistant && !isLoading && (
+                        <button type="button" className="regenerate-btn" onClick={handleRegenerate}>
+                          ↺ 재생성
+                        </button>
+                      )}
+                    </div>
                   )}
                 </article>
                 );

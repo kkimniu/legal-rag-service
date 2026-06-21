@@ -81,4 +81,6 @@ class CaseAttachmentRead(BaseModel):
     size_bytes: int
     extraction_status: str
     extracted_text_chars: int = 0
+    vector_status: str
+    vector_chunk_count: int = 0
     created_at: str

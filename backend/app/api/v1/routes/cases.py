@@ -33,6 +33,10 @@ from app.services.legal_case_service import (
     update_case_note,
     update_legal_case_status,
 )
+from app.services.case_attachment_vector_service import (
+    delete_case_attachment_vectors,
+    index_case_attachment,
+)
 
 router = APIRouter()
 
@@ -71,6 +75,8 @@ def attachment_read(attachment) -> CaseAttachmentRead:
         size_bytes=attachment.size_bytes,
         extraction_status=attachment.extraction_status,
         extracted_text_chars=len(attachment.extracted_text or ""),
+        vector_status=attachment.vector_status,
+        vector_chunk_count=attachment.vector_chunk_count,
         created_at=attachment.created_at.isoformat(),
     )
 
@@ -237,4 +243,22 @@ def delete_attachment(
     attachment = get_case_attachment(db, legal_case.id, attachment_id)
     if attachment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+    delete_case_attachment_vectors(attachment.id)
     delete_case_attachment(db, legal_case, attachment)
+
+
+@router.post("/{case_id}/attachments/{attachment_id}/index", response_model=CaseAttachmentRead)
+def index_attachment(
+    case_id: int,
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseAttachmentRead:
+    """Create or replace vector chunks for one owned attachment."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    attachment = get_case_attachment(db, legal_case.id, attachment_id)
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case attachment was not found.")
+    return attachment_read(index_case_attachment(db, legal_case, attachment))

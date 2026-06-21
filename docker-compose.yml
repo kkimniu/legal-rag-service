@@ -28,10 +28,12 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-legal_rag}:${POSTGRES_PASSWORD:-legal_rag_password}@db:5432/${POSTGRES_DB:-legal_rag}
       BACKEND_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       CHROMA_PERSIST_DIRECTORY: /app/chroma_db
+      UPLOAD_DIRECTORY: /app/uploads
     ports:
       - "8000:8000"
     volumes:
       - ./chroma_db:/app/chroma_db
+      - ./uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy

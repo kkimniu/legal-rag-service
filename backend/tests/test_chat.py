@@ -196,7 +196,7 @@ def test_chat_message_api_accepts_answer_mode(client: TestClient, monkeypatch) -
 
     captured = {}
 
-    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None):
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None, case_id=None):
         captured["answer_mode"] = answer_mode
         return RagAskResponse(
             answer="쟁점 정리 답변",
@@ -255,7 +255,7 @@ def test_chat_message_api_passes_case_notes_to_rag(client: TestClient, monkeypat
 
     captured = {}
 
-    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None):
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None, case_id=None):
         captured["case_context"] = case_context
         return RagAskResponse(answer="사건 메모 기반 답변", is_ready=True, sources=[])
 

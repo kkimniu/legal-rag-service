@@ -493,6 +493,15 @@ button:disabled {
   font-size: 12px;
 }
 
+.case-attachment-item .case-attachment-actions {
+  display: flex;
+  min-width: auto;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .case-linked-session-list {
   display: grid;
   gap: 6px;
@@ -848,6 +857,11 @@ summary {
 .source-meta .precedent-badge {
   background: #eef0ff;
   color: #3646a3;
+}
+
+.source-meta .attachment-badge {
+  background: #fff2cc;
+  color: #745900;
 }
 
 .source-item h3 {

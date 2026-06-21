@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     case_attachment_extract_max_chars: int = 20000
     case_attachment_context_max_chars: int = 3500
+    case_attachment_collection_name: str = "case_attachments"
+    case_attachment_chunk_size: int = 1000
+    case_attachment_chunk_overlap: int = 150
 
     @property
     def cors_origins(self) -> list[str]:

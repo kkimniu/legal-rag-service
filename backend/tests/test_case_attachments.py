@@ -59,8 +59,9 @@ def test_chat_message_api_passes_case_attachment_text_to_rag(
 
     captured = {}
 
-    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None):
+    def fake_answer(self, question, domain_code=None, chat_history=None, answer_mode="general", case_context=None, case_id=None):
         captured["case_context"] = case_context
+        captured["case_id"] = case_id
         return RagAskResponse(answer="첨부자료 기반 답변", is_ready=True, sources=[])
 
     monkeypatch.setattr("app.api.v1.routes.chat.RagService.answer", fake_answer)
@@ -74,3 +75,35 @@ def test_chat_message_api_passes_case_attachment_text_to_rag(
     assert response.status_code == 200
     assert "memo.txt" in captured["case_context"]
     assert "계약 종료 후 보증금 미반환 자료" in captured["case_context"]
+    assert captured["case_id"] == case_response.json()["id"]
+
+
+def test_case_attachment_can_be_reindexed(client: TestClient, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(settings, "upload_directory", str(tmp_path / "uploads"))
+    headers = _auth_headers(client, "case-attachment-index@example.com")
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "Attachment index case", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    upload_response = client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/attachments",
+        headers=headers,
+        files={"file": ("memo.txt", b"index this attachment", "text/plain")},
+    )
+
+    def fake_index(db, legal_case, attachment):
+        attachment.vector_status = "completed"
+        attachment.vector_chunk_count = 1
+        return attachment
+
+    monkeypatch.setattr("app.api.v1.routes.cases.index_case_attachment", fake_index)
+
+    response = client.post(
+        f"/api/v1/cases/{case_response.json()['id']}/attachments/{upload_response.json()['id']}/index",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["vector_status"] == "completed"
+    assert response.json()["vector_chunk_count"] == 1

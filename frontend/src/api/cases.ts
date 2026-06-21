@@ -41,6 +41,8 @@ export type CaseAttachment = {
   size_bytes: number;
   extraction_status: string;
   extracted_text_chars: number;
+  vector_status: string;
+  vector_chunk_count: number;
   created_at: string;
 };
 
@@ -154,6 +156,19 @@ export async function uploadCaseAttachment(caseId: number, file: File): Promise<
     const response = await api.post<CaseAttachment>(`/cases/${caseId}/attachments`, formData, {
       headers: await getAuthHeaders(),
     });
+    return (await indexCaseAttachment(caseId, response.data.id)) ?? response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function indexCaseAttachment(caseId: number, attachmentId: number): Promise<CaseAttachment | null> {
+  try {
+    const response = await api.post<CaseAttachment>(
+      `/cases/${caseId}/attachments/${attachmentId}/index`,
+      null,
+      { headers: await getAuthHeaders() },
+    );
     return response.data;
   } catch {
     return null;

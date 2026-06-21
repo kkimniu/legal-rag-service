@@ -9,6 +9,7 @@ import {
   fetchCaseNotes,
   fetchCases,
   generateCaseInsight,
+  indexCaseAttachment,
   updateCaseStatus,
   updateCaseNote,
   uploadCaseAttachment,
@@ -72,11 +73,14 @@ function evidenceStatusLabel(status?: string | null) {
 }
 
 function evidenceLabel(source: ChatMessage['sources'][number]) {
+  if (source.metadata.evidence_type === 'case_attachment') return '첨부자료';
   return source.metadata.evidence_type === 'precedent' ? '판례' : '법률';
 }
 
-function isPrecedentSource(source: ChatMessage['sources'][number]) {
-  return source.metadata.evidence_type === 'precedent';
+function evidenceBadgeClass(source: ChatMessage['sources'][number]) {
+  if (source.metadata.evidence_type === 'precedent') return 'precedent-badge';
+  if (source.metadata.evidence_type === 'case_attachment') return 'attachment-badge';
+  return 'statute-badge';
 }
 
 function caseNumber(source: ChatMessage['sources'][number]) {
@@ -110,6 +114,7 @@ export function App() {
   const [noteContent, setNoteContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [indexingAttachmentId, setIndexingAttachmentId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
@@ -441,6 +446,13 @@ export function App() {
     return '추출 대기';
   }
 
+  function vectorStatusLabel(status: string) {
+    if (status === 'completed') return 'AI 색인 완료';
+    if (status === 'skipped') return 'AI 색인 제외';
+    if (status === 'failed') return 'AI 색인 실패';
+    return 'AI 색인 대기';
+  }
+
   async function handleUploadCaseAttachment(event: ChangeEvent<HTMLInputElement>) {
     if (!activeCase || !event.target.files?.[0]) return;
     const file = event.target.files[0];
@@ -470,6 +482,19 @@ export function App() {
     setCaseAttachments((items) => items.filter((item) => item.id !== attachment.id));
     setCaseInsight(null);
     setChatStatus('첨부자료를 삭제했습니다.');
+  }
+
+  async function handleIndexCaseAttachment(attachment: CaseAttachment) {
+    if (!activeCase || indexingAttachmentId !== null) return;
+    setIndexingAttachmentId(attachment.id);
+    const indexed = await indexCaseAttachment(activeCase.id, attachment.id);
+    setIndexingAttachmentId(null);
+    if (!indexed) {
+      setChatStatus('첨부자료 AI 색인을 완료하지 못했습니다.');
+      return;
+    }
+    setCaseAttachments((items) => items.map((item) => (item.id === indexed.id ? indexed : item)));
+    setChatStatus(indexed.vector_status === 'completed' ? '첨부자료 AI 색인을 완료했습니다.' : '첨부자료 AI 색인이 대기 상태입니다.');
   }
 
   async function handleRegenerate() {
@@ -779,17 +804,30 @@ export function App() {
                               <small>
                                 {formatFileSize(attachment.size_bytes)} · {attachment.content_type ?? '파일'} ·{' '}
                                 {attachmentStatusLabel(attachment.extraction_status)} 쨌 {attachment.extracted_text_chars}자 쨌{' '}
+                                {vectorStatusLabel(attachment.vector_status)} · {attachment.vector_chunk_count}청크 ·{' '}
                                 {new Date(attachment.created_at).toLocaleString('ko-KR')}
                               </small>
                             </div>
-                            <button
-                              type="button"
-                              className="danger-button"
-                              aria-label={`${attachment.original_filename} 첨부 삭제`}
-                              onClick={() => handleDeleteCaseAttachment(attachment)}
-                            >
-                              삭제
-                            </button>
+                            <div className="case-attachment-actions">
+                              {attachment.extraction_status === 'completed' && attachment.vector_status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  onClick={() => handleIndexCaseAttachment(attachment)}
+                                  disabled={indexingAttachmentId !== null}
+                                >
+                                  {indexingAttachmentId === attachment.id ? '색인 중' : '색인 재시도'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="danger-button"
+                                aria-label={`${attachment.original_filename} 첨부 삭제`}
+                                onClick={() => handleDeleteCaseAttachment(attachment)}
+                              >
+                                삭제
+                              </button>
+                            </div>
                           </article>
                         ))}
                       </div>
@@ -1004,11 +1042,10 @@ export function App() {
                           const isLong = source.text.length > 200;
                           const sourceEvidenceLabel = evidenceLabel(source);
                           const sourceCaseNumber = caseNumber(source);
-                          const sourceIsPrecedent = isPrecedentSource(source);
                           return (
                             <section className="source-item" key={sourceKey}>
                               <div className="source-meta">
-                                <span className={sourceIsPrecedent ? 'precedent-badge' : 'statute-badge'}>
+                                <span className={evidenceBadgeClass(source)}>
                                   {sourceEvidenceLabel} 근거 {index + 1}
                                 </span>
                                 <span>{source.domain_name ?? '분야 미상'}</span>

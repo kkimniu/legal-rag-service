@@ -139,6 +139,7 @@ def send_message(
         chat_history=chat_history,
         answer_mode=payload.answer_mode,
         case_context=case_context,
+        case_id=session.case_id,
     )
     assistant_message = add_assistant_message(db, session, response, payload.answer_mode)
 

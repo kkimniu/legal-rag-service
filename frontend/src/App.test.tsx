@@ -12,6 +12,7 @@ import {
   fetchCaseNotes,
   fetchCases,
   generateCaseInsight,
+  indexCaseAttachment,
   updateCaseNote,
   updateCaseStatus,
   uploadCaseAttachment,
@@ -43,6 +44,7 @@ vi.mock('./api/cases', () => ({
   fetchCaseNotes: vi.fn(),
   fetchCases: vi.fn(),
   generateCaseInsight: vi.fn(),
+  indexCaseAttachment: vi.fn(),
   updateCaseNote: vi.fn(),
   updateCaseStatus: vi.fn(),
   uploadCaseAttachment: vi.fn(),
@@ -64,6 +66,7 @@ const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
+const mockedIndexCaseAttachment = vi.mocked(indexCaseAttachment);
 const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
 const mockedUploadCaseAttachment = vi.mocked(uploadCaseAttachment);
@@ -78,6 +81,7 @@ describe('App', () => {
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
+    mockedIndexCaseAttachment.mockResolvedValue(null);
     mockedUpdateCaseNote.mockResolvedValue(null);
     mockedUploadCaseAttachment.mockResolvedValue(null);
     mockedDeleteCaseAttachment.mockResolvedValue(false);
@@ -246,6 +250,8 @@ describe('App', () => {
       size_bytes: 13,
       extraction_status: 'completed',
       extracted_text_chars: 13,
+      vector_status: 'completed',
+      vector_chunk_count: 1,
       created_at: '2026-06-14T12:05:00',
     });
     mockedDeleteCaseAttachment.mockResolvedValue(true);

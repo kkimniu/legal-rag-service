@@ -23,6 +23,7 @@ class RagService:
         chat_history: list[tuple[str, str]] | None = None,
         answer_mode: str = "general",
         case_context: str | None = None,
+        case_id: int | None = None,
     ) -> RagAskResponse:
         """Retrieve legal/statute chunks and precedent chunks, then generate a grounded answer."""
         if not settings.openai_api_key or settings.openai_api_key.startswith("replace-"):
@@ -42,7 +43,13 @@ class RagService:
 
         try:
             retrieval_question = self._build_retrieval_question(question, chat_history or [], case_context=case_context)
-            sources = self._retrieve_sources(retrieval_question, question, persist_directory, domain_code)
+            sources = self._retrieve_sources(
+                retrieval_question,
+                question,
+                persist_directory,
+                domain_code,
+                case_id=case_id,
+            )
         except Exception as exc:
             return RagAskResponse(
                 answer=f"RAG 검색 중 오류가 발생했습니다: {exc}",
@@ -137,6 +144,7 @@ class RagService:
         original_question: str,
         persist_directory: Path,
         domain_code: str | None = None,
+        case_id: int | None = None,
     ) -> list[RagSource]:
         client = chromadb.PersistentClient(path=str(persist_directory))
         embeddings = OpenAIEmbeddings(
@@ -164,7 +172,37 @@ class RagService:
             n_results=self.top_k,
         )
 
-        return self._merge_sources(statute_sources[: self.top_k], precedent_sources[: self.top_k])
+        attachment_sources = self._retrieve_case_attachment_sources(
+            client=client,
+            query_embedding=query_embedding,
+            case_id=case_id,
+        )
+
+        return self._merge_sources(
+            statute_sources[: self.top_k],
+            precedent_sources[: self.top_k],
+            attachment_sources[: self.top_k],
+        )
+
+    def _retrieve_case_attachment_sources(
+        self,
+        client: Any,
+        query_embedding: list[float],
+        case_id: int | None,
+    ) -> list[RagSource]:
+        if case_id is None:
+            return []
+        try:
+            collection = client.get_collection(settings.case_attachment_collection_name)
+            result = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=self.top_k,
+                where={"case_id": case_id},
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception:
+            return []
+        return self._sources_from_result(result, evidence_type="case_attachment")
 
     def _retrieve_collection_sources(
         self,
@@ -462,6 +500,8 @@ class RagService:
             domain = source.domain_name or "분야 미상"
             evidence_type = source.metadata.get("evidence_type")
             evidence_label = "판례" if evidence_type == "precedent" else "법률"
+            if evidence_type == "case_attachment":
+                evidence_label = "개인 사건 첨부자료"
             case_number = source.metadata.get("meta_case_number") or source.metadata.get("case_number") or ""
             court = source.metadata.get("meta_court") or source.metadata.get("court") or ""
             decision_date = source.metadata.get("meta_decision_date") or source.metadata.get("decision_date") or ""

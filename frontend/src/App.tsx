@@ -123,9 +123,25 @@ function sortCaseTasks(tasks: CaseTask[]) {
   });
 }
 
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function isTaskOverdue(task: CaseTask) {
   if (!task.due_date || task.is_completed) return false;
-  return task.due_date < new Date().toISOString().slice(0, 10);
+  return task.due_date < todayString();
+}
+
+function isTaskDueToday(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  return task.due_date === todayString();
+}
+
+function isTaskImminent(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  const today = todayString();
+  const sevenDaysLater = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return task.due_date > today && task.due_date <= sevenDaysLater;
 }
 
 function searchResultTypeLabel(resultType: PersonalSearchResult['result_type']) {
@@ -168,6 +184,7 @@ export function App() {
   const [caseTimeline, setCaseTimeline] = useState<CaseTimelineItem[]>([]);
   const [isTimelineLoading, setIsTimelineLoading] = useState(false);
   const [upcomingTasks, setUpcomingTasks] = useState<UpcomingCaseTask[]>([]);
+  const [deadlineAlertDismissed, setDeadlineAlertDismissed] = useState(false);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
@@ -286,6 +303,7 @@ export function App() {
       const nextCases = await fetchCases();
       const nextSessions = await fetchChatSessions();
       setUpcomingTasks(await fetchUpcomingCaseTasks());
+      setDeadlineAlertDismissed(false);
       setCases(nextCases);
       setActiveCase(nextCases[0] ?? null);
       setCaseInsight(null);
@@ -860,6 +878,25 @@ export function App() {
 
           {currentUser && (
             <>
+            {!deadlineAlertDismissed && (() => {
+              const overdueCount = upcomingTasks.filter(isTaskOverdue).length;
+              const todayCount = upcomingTasks.filter(isTaskDueToday).length;
+              if (overdueCount === 0 && todayCount === 0) return null;
+              const parts = [];
+              if (overdueCount > 0) parts.push(`기한 초과 ${overdueCount}건`);
+              if (todayCount > 0) parts.push(`오늘 마감 ${todayCount}건`);
+              return (
+                <div className="deadline-alert" role="alert">
+                  <span>⚠️ {parts.join(' · ')}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="알림 닫기"
+                    onClick={() => setDeadlineAlertDismissed(true)}
+                  >✕</button>
+                </div>
+              );
+            })()}
             <section className="workspace-search-panel">
               <form className="workspace-search-form" onSubmit={handleWorkspaceSearch}>
                 <label htmlFor="workspace-search">통합 검색</label>
@@ -906,30 +943,99 @@ export function App() {
                   선택 해제
                 </button>
               </div>
-              <section className="deadline-dashboard">
-                <div className="deadline-dashboard-heading">
-                  <h3>다가오는 기한</h3>
-                  <span>30일 이내</span>
-                </div>
-                {upcomingTasks.length > 0 ? (
-                  <div className="deadline-list">
-                    {upcomingTasks.slice(0, 5).map((task) => (
-                      <button
-                        type="button"
-                        className={isTaskOverdue(task) ? 'deadline-item overdue' : 'deadline-item'}
-                        key={task.id}
-                        onClick={() => handleSelectUpcomingTask(task)}
-                      >
-                        <strong>{task.title}</strong>
-                        <span>{task.case_title}</span>
-                        <time>{isTaskOverdue(task) ? `기한 초과 · ${task.due_date}` : task.due_date}</time>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty-state">30일 이내 예정된 기한이 없습니다.</p>
-                )}
-              </section>
+              {(() => {
+                const overdueTasks = upcomingTasks.filter(isTaskOverdue);
+                const todayTasks = upcomingTasks.filter(isTaskDueToday);
+                const imminentTasks = upcomingTasks.filter(isTaskImminent);
+                const laterTasks = upcomingTasks.filter(
+                  (t) => !isTaskOverdue(t) && !isTaskDueToday(t) && !isTaskImminent(t),
+                );
+                const urgentCount = overdueTasks.length + todayTasks.length;
+                return (
+                  <section className="deadline-dashboard">
+                    <div className="deadline-dashboard-heading">
+                      <h3>기한 알림 센터</h3>
+                      {urgentCount > 0 && (
+                        <span className="deadline-urgent-badge">{urgentCount}</span>
+                      )}
+                    </div>
+                    {upcomingTasks.length === 0 ? (
+                      <p className="empty-state">30일 이내 예정된 기한이 없습니다.</p>
+                    ) : (
+                      <div className="deadline-groups">
+                        {overdueTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label overdue">기한 초과 {overdueTasks.length}건</div>
+                            {overdueTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item overdue"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {todayTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label today">오늘 마감 {todayTasks.length}건</div>
+                            {todayTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item today"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>오늘</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {imminentTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label imminent">7일 이내 {imminentTasks.length}건</div>
+                            {imminentTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item imminent"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {laterTasks.length > 0 && (
+                          <div className="deadline-group">
+                            <div className="deadline-group-label later">이후 예정 {laterTasks.length}건</div>
+                            {laterTasks.map((task) => (
+                              <button
+                                type="button"
+                                className="deadline-item"
+                                key={task.id}
+                                onClick={() => handleSelectUpcomingTask(task)}
+                              >
+                                <strong>{task.title}</strong>
+                                <span>{task.case_title}</span>
+                                <time>{task.due_date}</time>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
               <form className="case-form" onSubmit={handleCreateCase}>
                 <label htmlFor="case-title">새 사건</label>
                 <input

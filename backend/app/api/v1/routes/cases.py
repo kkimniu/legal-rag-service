@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from app.schemas.legal_case import (
     LegalCaseCreate,
     LegalCaseRead,
     LegalCaseUpdate,
+    UpcomingCaseTaskRead,
 )
 from app.services.legal_case_service import (
     count_case_chats,
@@ -48,6 +49,7 @@ from app.services.case_task_service import (
     delete_case_task,
     get_case_task,
     list_case_tasks,
+    list_upcoming_case_tasks,
     update_case_task,
 )
 
@@ -104,6 +106,10 @@ def task_read(task: CaseTask) -> CaseTaskRead:
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
     )
+
+
+def upcoming_task_read(task: CaseTask, case_title: str) -> UpcomingCaseTaskRead:
+    return UpcomingCaseTaskRead(**task_read(task).model_dump(), case_title=case_title)
 
 
 @router.post("", response_model=LegalCaseRead, status_code=status.HTTP_201_CREATED)
@@ -325,6 +331,19 @@ def read_tasks(
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
     return [task_read(task) for task in list_case_tasks(db, legal_case.id)]
+
+
+@router.get("/tasks/upcoming", response_model=list[UpcomingCaseTaskRead])
+def read_upcoming_tasks(
+    days: int = Query(default=30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[UpcomingCaseTaskRead]:
+    """Return overdue and upcoming tasks across the current user's legal matters."""
+    return [
+        upcoming_task_read(task, case_title)
+        for task, case_title in list_upcoming_case_tasks(db, current_user.id, days=days)
+    ]
 
 
 @router.post("/{case_id}/tasks", response_model=CaseTaskRead, status_code=status.HTTP_201_CREATED)

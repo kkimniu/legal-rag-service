@@ -15,6 +15,7 @@ import {
   fetchCaseNotes,
   fetchCaseTasks,
   fetchCases,
+  fetchUpcomingCaseTasks,
   generateCaseInsight,
   indexCaseAttachment,
   updateCaseNote,
@@ -52,6 +53,7 @@ vi.mock('./api/cases', () => ({
   fetchCaseNotes: vi.fn(),
   fetchCaseTasks: vi.fn(),
   fetchCases: vi.fn(),
+  fetchUpcomingCaseTasks: vi.fn(),
   generateCaseInsight: vi.fn(),
   indexCaseAttachment: vi.fn(),
   updateCaseNote: vi.fn(),
@@ -79,6 +81,7 @@ const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
 const mockedFetchCaseTasks = vi.mocked(fetchCaseTasks);
 const mockedFetchCases = vi.mocked(fetchCases);
+const mockedFetchUpcomingCaseTasks = vi.mocked(fetchUpcomingCaseTasks);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
 const mockedIndexCaseAttachment = vi.mocked(indexCaseAttachment);
 const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
@@ -96,6 +99,7 @@ describe('App', () => {
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
     mockedFetchCaseTasks.mockResolvedValue([]);
+    mockedFetchUpcomingCaseTasks.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
     mockedIndexCaseAttachment.mockResolvedValue(null);
     mockedUpdateCaseNote.mockResolvedValue(null);
@@ -513,6 +517,44 @@ describe('App', () => {
 
     expect(screen.queryByText('종료된 형사 사건')).not.toBeInTheDocument();
     expect(screen.getByText('상표 관찰 사건')).toBeInTheDocument();
+  });
+
+  it('opens a legal case from the upcoming deadline dashboard', async () => {
+    mockedFetchCurrentUser.mockResolvedValue({ id: 1, email: 'deadline@example.com', is_active: true });
+    mockedFetchCases.mockResolvedValue([
+      {
+        id: 4,
+        title: '보증금 사건',
+        summary: '',
+        status: 'active',
+        domain_code: '01_civil_law',
+        created_at: '2026-06-20T09:00:00',
+        updated_at: '2026-06-20T09:00:00',
+        note_count: 0,
+        chat_count: 0,
+      },
+    ]);
+    mockedFetchUpcomingCaseTasks.mockResolvedValue([
+      {
+        id: 20,
+        case_id: 4,
+        case_title: '보증금 사건',
+        title: '기한 초과 작업',
+        due_date: '2020-01-01',
+        is_completed: false,
+        created_at: '2026-06-20T09:00:00',
+        updated_at: '2026-06-20T09:00:00',
+      },
+    ]);
+
+    render(<App />);
+
+    const deadlineButton = await screen.findByRole('button', { name: /기한 초과 작업/ });
+    expect(screen.getByText(/기한 초과 · 2020-01-01/)).toBeInTheDocument();
+    mockedFetchCaseTasks.mockClear();
+    await userEvent.click(deadlineButton);
+
+    expect(mockedFetchCaseTasks).toHaveBeenCalledWith(4);
   });
 
   it('filters and pins chat sessions', async () => {

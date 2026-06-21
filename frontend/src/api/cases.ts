@@ -56,6 +56,10 @@ export type CaseTask = {
   updated_at: string;
 };
 
+export type UpcomingCaseTask = CaseTask & {
+  case_title: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -162,6 +166,18 @@ export async function fetchCaseAttachments(caseId: number): Promise<CaseAttachme
 export async function fetchCaseTasks(caseId: number): Promise<CaseTask[]> {
   try {
     const response = await api.get<CaseTask[]>(`/cases/${caseId}/tasks`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchUpcomingCaseTasks(days = 30): Promise<UpcomingCaseTask[]> {
+  try {
+    const response = await api.get<UpcomingCaseTask[]>('/cases/tasks/upcoming', {
+      headers: await getAuthHeaders(),
+      params: { days },
+    });
     return response.data;
   } catch {
     return [];

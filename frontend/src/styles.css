@@ -223,6 +223,76 @@ button:disabled {
   gap: 8px;
 }
 
+.deadline-dashboard {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #d8dee8;
+  border-bottom: 1px solid #d8dee8;
+  padding: 12px 0;
+}
+
+.deadline-dashboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.deadline-dashboard-heading h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+}
+
+.deadline-dashboard-heading span {
+  color: #536174;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.deadline-list {
+  display: grid;
+  gap: 6px;
+}
+
+.deadline-item {
+  display: grid;
+  width: 100%;
+  justify-items: start;
+  gap: 3px;
+  border: 1px solid #d8dee8;
+  background: #f7fafc;
+  color: #172033;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.deadline-item:hover {
+  border-color: #8aa1b8;
+  background: #eef3f8;
+}
+
+.deadline-item strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.deadline-item span,
+.deadline-item time {
+  color: #536174;
+  font-size: 12px;
+}
+
+.deadline-item.overdue {
+  border-color: #e3aaa5;
+  background: #fff7f5;
+}
+
+.deadline-item.overdue time {
+  color: #a23c33;
+  font-weight: 800;
+}
+
 .case-filter-panel {
   display: grid;
   gap: 8px;

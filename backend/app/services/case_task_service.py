@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,6 +23,29 @@ def list_case_tasks(db: Session, case_id: int, limit: int = 100) -> list[CaseTas
 def get_case_task(db: Session, case_id: int, task_id: int) -> CaseTask | None:
     statement = select(CaseTask).where(CaseTask.id == task_id, CaseTask.case_id == case_id)
     return db.scalar(statement)
+
+
+def list_upcoming_case_tasks(
+    db: Session,
+    user_id: int,
+    days: int = 30,
+    limit: int = 50,
+) -> list[tuple[CaseTask, str]]:
+    """Return overdue and upcoming incomplete tasks across one user's legal matters."""
+    end_date = date.today() + timedelta(days=days)
+    statement = (
+        select(CaseTask, LegalCase.title)
+        .join(LegalCase, LegalCase.id == CaseTask.case_id)
+        .where(
+            LegalCase.user_id == user_id,
+            CaseTask.is_completed.is_(False),
+            CaseTask.due_date.is_not(None),
+            CaseTask.due_date <= end_date,
+        )
+        .order_by(CaseTask.due_date, CaseTask.created_at)
+        .limit(limit)
+    )
+    return [(task, case_title) for task, case_title in db.execute(statement).all()]
 
 
 def create_case_task(

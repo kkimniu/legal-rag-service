@@ -112,3 +112,9 @@ class CaseTaskRead(BaseModel):
     is_completed: bool
     created_at: str
     updated_at: str
+
+
+class UpcomingCaseTaskRead(CaseTaskRead):
+    """Incomplete dated task enriched with its legal matter title."""
+
+    case_title: str

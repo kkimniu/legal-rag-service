@@ -12,6 +12,7 @@ import {
   fetchCaseNotes,
   fetchCaseTasks,
   fetchCases,
+  fetchUpcomingCaseTasks,
   generateCaseInsight,
   indexCaseAttachment,
   updateCaseStatus,
@@ -24,6 +25,7 @@ import {
   type CaseStatus,
   type CaseTask,
   type LegalCase,
+  type UpcomingCaseTask,
 } from './api/cases';
 import {
   createChatSession,
@@ -137,6 +139,7 @@ export function App() {
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
   const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
   const [caseTasks, setCaseTasks] = useState<CaseTask[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<UpcomingCaseTask[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
@@ -228,6 +231,7 @@ export function App() {
 
   async function refreshCases() {
     const nextCases = await fetchCases();
+    setUpcomingTasks(await fetchUpcomingCaseTasks());
     setCases(nextCases);
     if (nextCases.length > 0 && !activeCase) {
       setActiveCase(nextCases[0]);
@@ -245,6 +249,7 @@ export function App() {
       setCurrentUser(authResult.user);
       const nextCases = await fetchCases();
       const nextSessions = await fetchChatSessions();
+      setUpcomingTasks(await fetchUpcomingCaseTasks());
       setCases(nextCases);
       setActiveCase(nextCases[0] ?? null);
       setCaseInsight(null);
@@ -272,6 +277,7 @@ export function App() {
     setCaseNotes([]);
     setCaseAttachments([]);
     setCaseTasks([]);
+    setUpcomingTasks([]);
     setCaseInsight(null);
     setNoteTitle('');
     setNoteContent('');
@@ -343,6 +349,11 @@ export function App() {
     setCaseAttachments(await fetchCaseAttachments(legalCase.id));
     setCaseTasks(await fetchCaseTasks(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
+  }
+
+  async function handleSelectUpcomingTask(task: UpcomingCaseTask) {
+    const legalCase = cases.find((item) => item.id === task.case_id);
+    if (legalCase) await handleSelectCase(legalCase);
   }
 
   async function handleDeleteSession(session: ChatSession) {
@@ -438,6 +449,7 @@ export function App() {
       return;
     }
     setCaseTasks((items) => sortCaseTasks([...items, task]));
+    setUpcomingTasks(await fetchUpcomingCaseTasks());
     setTaskTitle('');
     setTaskDueDate('');
     setChatStatus('사건 할 일을 추가했습니다.');
@@ -451,6 +463,7 @@ export function App() {
       return;
     }
     setCaseTasks((items) => sortCaseTasks(items.map((item) => (item.id === updated.id ? updated : item))));
+    setUpcomingTasks(await fetchUpcomingCaseTasks());
     setChatStatus(updated.is_completed ? '사건 할 일을 완료 처리했습니다.' : '사건 할 일을 다시 진행 상태로 변경했습니다.');
   }
 
@@ -462,6 +475,7 @@ export function App() {
       return;
     }
     setCaseTasks((items) => items.filter((item) => item.id !== task.id));
+    setUpcomingTasks(await fetchUpcomingCaseTasks());
     setChatStatus('사건 할 일을 삭제했습니다.');
   }
 
@@ -703,6 +717,30 @@ export function App() {
                   선택 해제
                 </button>
               </div>
+              <section className="deadline-dashboard">
+                <div className="deadline-dashboard-heading">
+                  <h3>다가오는 기한</h3>
+                  <span>30일 이내</span>
+                </div>
+                {upcomingTasks.length > 0 ? (
+                  <div className="deadline-list">
+                    {upcomingTasks.slice(0, 5).map((task) => (
+                      <button
+                        type="button"
+                        className={isTaskOverdue(task) ? 'deadline-item overdue' : 'deadline-item'}
+                        key={task.id}
+                        onClick={() => handleSelectUpcomingTask(task)}
+                      >
+                        <strong>{task.title}</strong>
+                        <span>{task.case_title}</span>
+                        <time>{isTaskOverdue(task) ? `기한 초과 · ${task.due_date}` : task.due_date}</time>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">30일 이내 예정된 기한이 없습니다.</p>
+                )}
+              </section>
               <form className="case-form" onSubmit={handleCreateCase}>
                 <label htmlFor="case-title">새 사건</label>
                 <input

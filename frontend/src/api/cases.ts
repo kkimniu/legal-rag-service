@@ -108,6 +108,31 @@ export async function updateCaseStatus(caseId: number, status: CaseStatus): Prom
   }
 }
 
+export async function updateCase(
+  caseId: number,
+  payload: { title?: string; summary?: string; status?: CaseStatus },
+): Promise<LegalCase | null> {
+  try {
+    const response = await api.patch<LegalCase>(
+      `/cases/${caseId}`,
+      payload,
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCase(caseId: number): Promise<boolean> {
+  try {
+    await api.delete(`/cases/${caseId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function generateCaseInsight(caseId: number): Promise<CaseInsight | null> {
   try {
     const response = await api.post<CaseInsight>(`/cases/${caseId}/insight`, null, {

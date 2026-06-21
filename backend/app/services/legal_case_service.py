@@ -72,6 +72,39 @@ def update_legal_case_status(
     return legal_case
 
 
+def update_legal_case(
+    db: Session,
+    legal_case: LegalCase,
+    title: str | None = None,
+    summary: str | None = None,
+    status: str | None = None,
+) -> LegalCase:
+    """Update title, summary, and/or status for one owned legal matter."""
+    if title is not None:
+        legal_case.title = title.strip()
+    if summary is not None:
+        legal_case.summary = summary.strip()
+    if status is not None:
+        legal_case.status = status
+    legal_case.updated_at = datetime.now(UTC)
+    db.add(legal_case)
+    db.commit()
+    db.refresh(legal_case)
+    return legal_case
+
+
+def delete_legal_case(db: Session, legal_case: LegalCase) -> None:
+    """Delete one owned legal matter and all its child records and files."""
+    from app.services.case_attachment_vector_service import delete_case_attachment_vectors
+
+    for attachment in list_case_attachments(db, legal_case.id):
+        delete_case_attachment_vectors(attachment.id)
+        Path(attachment.storage_path).unlink(missing_ok=True)
+
+    db.delete(legal_case)
+    db.commit()
+
+
 def generate_case_insight(db: Session, legal_case: LegalCase) -> dict[str, object]:
     """Generate and persist a compact AI summary for one owned legal matter."""
     notes = list_case_notes(db, legal_case.id, limit=30)

@@ -31,6 +31,7 @@ from app.services.legal_case_service import (
     create_legal_case,
     delete_case_attachment,
     delete_case_note,
+    delete_legal_case,
     generate_case_insight,
     get_case_attachment,
     get_case_note,
@@ -39,6 +40,7 @@ from app.services.legal_case_service import (
     list_case_notes,
     list_legal_cases,
     update_case_note,
+    update_legal_case,
     update_legal_case_status,
 )
 from app.services.case_attachment_vector_service import (
@@ -148,11 +150,27 @@ def update_case(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LegalCaseRead:
-    """Update one owned legal matter."""
+    """Update title, summary, and/or status for one owned legal matter."""
     legal_case = get_legal_case(db, current_user.id, case_id)
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
-    return case_read(update_legal_case_status(db, legal_case, payload.status), db)
+    return case_read(
+        update_legal_case(db, legal_case, title=payload.title, summary=payload.summary, status=payload.status),
+        db,
+    )
+
+
+@router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_case(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete one owned legal matter and all its associated data."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    delete_legal_case(db, legal_case)
 
 
 @router.post("/{case_id}/insight", response_model=CaseInsightRead)

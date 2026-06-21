@@ -215,6 +215,61 @@ def test_case_api_uploads_lists_and_deletes_attachment(client: TestClient, tmp_p
     assert empty_list_response.json() == []
 
 
+def test_case_api_updates_title_and_summary(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-title-edit@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-title-edit@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "원래 제목", "domain_code": "01_civil_law"},
+        headers=headers,
+    )
+    case_id = case_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/cases/{case_id}",
+        json={"title": "수정된 제목", "summary": "새로운 요약"},
+        headers=headers,
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["title"] == "수정된 제목"
+    assert update_response.json()["summary"] == "새로운 요약"
+
+
+def test_case_api_deletes_case(client: TestClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "upload_directory", str(tmp_path / "uploads"))
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "case-delete@example.com", "password": "password123"},
+    )
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "case-delete@example.com", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    case_response = client.post(
+        "/api/v1/cases",
+        json={"title": "삭제할 사건", "domain_code": "02_admin_law"},
+        headers=headers,
+    )
+    case_id = case_response.json()["id"]
+
+    delete_response = client.delete(f"/api/v1/cases/{case_id}", headers=headers)
+    cases_after = client.get("/api/v1/cases", headers=headers)
+    get_after = client.get(f"/api/v1/cases/{case_id}/notes", headers=headers)
+
+    assert delete_response.status_code == 204
+    assert cases_after.json() == []
+    assert get_after.status_code == 404
+
+
 def test_chat_session_rejects_other_users_case(client: TestClient) -> None:
     client.post(
         "/api/v1/auth/register",

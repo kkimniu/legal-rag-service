@@ -44,7 +44,9 @@ class CaseInsightRead(BaseModel):
 class LegalCaseUpdate(BaseModel):
     """Payload for updating a personal legal matter."""
 
-    status: CaseStatus
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    summary: str | None = None
+    status: CaseStatus | None = None
 
 
 class CaseNoteCreate(BaseModel):

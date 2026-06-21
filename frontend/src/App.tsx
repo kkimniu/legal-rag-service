@@ -4,6 +4,7 @@ import {
   createCase,
   createCaseNote,
   createCaseTask,
+  deleteCase,
   deleteCaseAttachment,
   deleteCaseNote,
   deleteCaseTask,
@@ -16,6 +17,7 @@ import {
   fetchUpcomingCaseTasks,
   generateCaseInsight,
   indexCaseAttachment,
+  updateCase,
   updateCaseStatus,
   updateCaseNote,
   updateCaseTask,
@@ -175,6 +177,10 @@ export function App() {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingCase, setEditingCase] = useState<LegalCase | null>(null);
+  const [editCaseTitle, setEditCaseTitle] = useState('');
+  const [editCaseSummary, setEditCaseSummary] = useState('');
+  const [deletingCaseId, setDeletingCaseId] = useState<number | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [indexingAttachmentId, setIndexingAttachmentId] = useState<number | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
@@ -412,6 +418,50 @@ export function App() {
     setCases((items) => items.map((item) => (item.id === updatedCase.id ? updatedCase : item)));
     await refreshCaseTimeline(updatedCase.id);
     setChatStatus(`사건 상태를 ${caseStatusLabel(updatedCase.status)} 상태로 변경했습니다.`);
+  }
+
+  function handleOpenEditCase(legalCase: LegalCase) {
+    setEditingCase(legalCase);
+    setEditCaseTitle(legalCase.title);
+    setEditCaseSummary(legalCase.summary);
+  }
+
+  async function handleSaveEditCase(event: FormEvent) {
+    event.preventDefault();
+    if (!editingCase || !editCaseTitle.trim()) return;
+    const updated = await updateCase(editingCase.id, {
+      title: editCaseTitle.trim(),
+      summary: editCaseSummary.trim(),
+    });
+    if (!updated) {
+      setChatStatus('사건 정보를 수정하지 못했습니다.');
+      return;
+    }
+    setCases((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    if (activeCase?.id === updated.id) setActiveCase(updated);
+    setEditingCase(null);
+    setChatStatus('사건 정보를 수정했습니다.');
+  }
+
+  async function handleConfirmDeleteCase() {
+    if (deletingCaseId === null) return;
+    const ok = await deleteCase(deletingCaseId);
+    if (!ok) {
+      setChatStatus('사건을 삭제하지 못했습니다.');
+      setDeletingCaseId(null);
+      return;
+    }
+    setCases((items) => items.filter((item) => item.id !== deletingCaseId));
+    if (activeCase?.id === deletingCaseId) {
+      setActiveCase(null);
+      setCaseNotes([]);
+      setCaseAttachments([]);
+      setCaseTasks([]);
+      setCaseTimeline([]);
+      setCaseInsight(null);
+    }
+    setDeletingCaseId(null);
+    setChatStatus('사건을 삭제했습니다.');
   }
 
   async function refreshCaseTimeline(caseId: number) {
@@ -931,17 +981,35 @@ export function App() {
               {cases.length > 0 ? (
                 <div className="case-list">
                   {filteredCases.map((legalCase) => (
-                    <button
-                      type="button"
+                    <div
                       className={activeCase?.id === legalCase.id ? 'case-item active-case' : 'case-item'}
                       key={legalCase.id}
-                      onClick={() => handleSelectCase(legalCase)}
                     >
-                      <span>{legalCase.title}</span>
-                      <small>
-                        {caseStatusLabel(legalCase.status)} · {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
-                      </small>
-                    </button>
+                      <button
+                        type="button"
+                        className="case-item-body"
+                        onClick={() => handleSelectCase(legalCase)}
+                      >
+                        <span>{legalCase.title}</span>
+                        <small>
+                          {caseStatusLabel(legalCase.status)} · {domainLabel(legalCase.domain_code)} · 채팅 {legalCase.chat_count}개 · 메모 {legalCase.note_count}개
+                        </small>
+                      </button>
+                      <div className="case-item-actions">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="사건 수정"
+                          onClick={(e) => { e.stopPropagation(); handleOpenEditCase(legalCase); }}
+                        >✏️</button>
+                        <button
+                          type="button"
+                          className="icon-button danger"
+                          title="사건 삭제"
+                          onClick={(e) => { e.stopPropagation(); setDeletingCaseId(legalCase.id); }}
+                        >🗑️</button>
+                      </div>
+                    </div>
                   ))}
                   {filteredCases.length === 0 && (
                     <p className="empty-state">조건에 맞는 사건이 없습니다.</p>
@@ -1476,6 +1544,48 @@ export function App() {
           </form>
         </section>
       </section>
+
+      {editingCase && (
+        <div className="modal-overlay" onClick={() => setEditingCase(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleSaveEditCase}>
+            <h3>사건 수정</h3>
+            <label className="modal-label">
+              제목
+              <input
+                value={editCaseTitle}
+                onChange={(e) => setEditCaseTitle(e.target.value)}
+                maxLength={255}
+                required
+              />
+            </label>
+            <label className="modal-label">
+              요약
+              <textarea
+                value={editCaseSummary}
+                onChange={(e) => setEditCaseSummary(e.target.value)}
+                rows={4}
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="submit">저장</button>
+              <button type="button" className="secondary-button" onClick={() => setEditingCase(null)}>취소</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deletingCaseId !== null && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>사건 삭제</h3>
+            <p>사건과 모든 메모, 할 일, 첨부자료가 영구 삭제됩니다. 계속하시겠습니까?</p>
+            <div className="modal-actions">
+              <button className="danger-button" onClick={handleConfirmDeleteCase}>삭제</button>
+              <button className="secondary-button" onClick={() => setDeletingCaseId(null)}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

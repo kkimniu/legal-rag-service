@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models.legal_case import CaseNote, LegalCase
+from app.models.legal_case import CaseNote, CaseTask, LegalCase
 from app.models.user import User
 from app.schemas.legal_case import (
     CaseAttachmentRead,
@@ -14,6 +14,9 @@ from app.schemas.legal_case import (
     CaseNoteCreate,
     CaseNoteRead,
     CaseNoteUpdate,
+    CaseTaskCreate,
+    CaseTaskRead,
+    CaseTaskUpdate,
     LegalCaseCreate,
     LegalCaseRead,
     LegalCaseUpdate,
@@ -39,6 +42,13 @@ from app.services.legal_case_service import (
 from app.services.case_attachment_vector_service import (
     delete_case_attachment_vectors,
     index_case_attachment,
+)
+from app.services.case_task_service import (
+    create_case_task,
+    delete_case_task,
+    get_case_task,
+    list_case_tasks,
+    update_case_task,
 )
 
 router = APIRouter()
@@ -81,6 +91,18 @@ def attachment_read(attachment) -> CaseAttachmentRead:
         vector_status=attachment.vector_status,
         vector_chunk_count=attachment.vector_chunk_count,
         created_at=attachment.created_at.isoformat(),
+    )
+
+
+def task_read(task: CaseTask) -> CaseTaskRead:
+    return CaseTaskRead(
+        id=task.id,
+        case_id=task.case_id,
+        title=task.title,
+        due_date=task.due_date.isoformat() if task.due_date else None,
+        is_completed=task.is_completed,
+        created_at=task.created_at.isoformat(),
+        updated_at=task.updated_at.isoformat(),
     )
 
 
@@ -290,3 +312,67 @@ def download_attachment(
         media_type=attachment.content_type or "application/octet-stream",
         filename=attachment.original_filename,
     )
+
+
+@router.get("/{case_id}/tasks", response_model=list[CaseTaskRead])
+def read_tasks(
+    case_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CaseTaskRead]:
+    """Return action items for one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return [task_read(task) for task in list_case_tasks(db, legal_case.id)]
+
+
+@router.post("/{case_id}/tasks", response_model=CaseTaskRead, status_code=status.HTTP_201_CREATED)
+def create_task(
+    case_id: int,
+    payload: CaseTaskCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseTaskRead:
+    """Create an action item under one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    return task_read(create_case_task(db, legal_case, payload.title, payload.due_date))
+
+
+@router.put("/{case_id}/tasks/{task_id}", response_model=CaseTaskRead)
+def update_task(
+    case_id: int,
+    task_id: int,
+    payload: CaseTaskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CaseTaskRead:
+    """Update an action item under one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    task = get_case_task(db, legal_case.id, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case task was not found.")
+    return task_read(
+        update_case_task(db, legal_case, task, payload.title, payload.due_date, payload.is_completed)
+    )
+
+
+@router.delete("/{case_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(
+    case_id: int,
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete an action item under one owned legal matter."""
+    legal_case = get_legal_case(db, current_user.id, case_id)
+    if legal_case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Legal case was not found.")
+    task = get_case_task(db, legal_case.id, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case task was not found.")
+    delete_case_task(db, legal_case, task)

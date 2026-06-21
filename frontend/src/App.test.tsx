@@ -6,16 +6,20 @@ import { fetchCurrentUser, login, register } from './api/auth';
 import {
   createCase,
   createCaseNote,
+  createCaseTask,
   deleteCaseAttachment,
   deleteCaseNote,
+  deleteCaseTask,
   downloadCaseAttachment,
   fetchCaseAttachments,
   fetchCaseNotes,
+  fetchCaseTasks,
   fetchCases,
   generateCaseInsight,
   indexCaseAttachment,
   updateCaseNote,
   updateCaseStatus,
+  updateCaseTask,
   uploadCaseAttachment,
 } from './api/cases';
 import { createChatSession, fetchChatMessages, fetchChatSessions, sendChatMessage, updateChatSessionPin } from './api/chat';
@@ -39,16 +43,20 @@ vi.mock('./api/chat', () => ({
 vi.mock('./api/cases', () => ({
   createCase: vi.fn(),
   createCaseNote: vi.fn(),
+  createCaseTask: vi.fn(),
   deleteCaseAttachment: vi.fn(),
   deleteCaseNote: vi.fn(),
+  deleteCaseTask: vi.fn(),
   downloadCaseAttachment: vi.fn(),
   fetchCaseAttachments: vi.fn(),
   fetchCaseNotes: vi.fn(),
+  fetchCaseTasks: vi.fn(),
   fetchCases: vi.fn(),
   generateCaseInsight: vi.fn(),
   indexCaseAttachment: vi.fn(),
   updateCaseNote: vi.fn(),
   updateCaseStatus: vi.fn(),
+  updateCaseTask: vi.fn(),
   uploadCaseAttachment: vi.fn(),
 }));
 
@@ -62,16 +70,20 @@ const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedUpdateChatSessionPin = vi.mocked(updateChatSessionPin);
 const mockedCreateCase = vi.mocked(createCase);
 const mockedCreateCaseNote = vi.mocked(createCaseNote);
+const mockedCreateCaseTask = vi.mocked(createCaseTask);
 const mockedDeleteCaseAttachment = vi.mocked(deleteCaseAttachment);
 const mockedDeleteCaseNote = vi.mocked(deleteCaseNote);
+const mockedDeleteCaseTask = vi.mocked(deleteCaseTask);
 const mockedDownloadCaseAttachment = vi.mocked(downloadCaseAttachment);
 const mockedFetchCaseAttachments = vi.mocked(fetchCaseAttachments);
 const mockedFetchCaseNotes = vi.mocked(fetchCaseNotes);
+const mockedFetchCaseTasks = vi.mocked(fetchCaseTasks);
 const mockedFetchCases = vi.mocked(fetchCases);
 const mockedGenerateCaseInsight = vi.mocked(generateCaseInsight);
 const mockedIndexCaseAttachment = vi.mocked(indexCaseAttachment);
 const mockedUpdateCaseNote = vi.mocked(updateCaseNote);
 const mockedUpdateCaseStatus = vi.mocked(updateCaseStatus);
+const mockedUpdateCaseTask = vi.mocked(updateCaseTask);
 const mockedUploadCaseAttachment = vi.mocked(uploadCaseAttachment);
 
 describe('App', () => {
@@ -83,12 +95,16 @@ describe('App', () => {
     mockedFetchCases.mockResolvedValue([]);
     mockedFetchCaseAttachments.mockResolvedValue([]);
     mockedFetchCaseNotes.mockResolvedValue([]);
+    mockedFetchCaseTasks.mockResolvedValue([]);
     mockedGenerateCaseInsight.mockResolvedValue(null);
     mockedIndexCaseAttachment.mockResolvedValue(null);
     mockedUpdateCaseNote.mockResolvedValue(null);
     mockedUploadCaseAttachment.mockResolvedValue(null);
     mockedDeleteCaseAttachment.mockResolvedValue(false);
     mockedDeleteCaseNote.mockResolvedValue(false);
+    mockedCreateCaseTask.mockResolvedValue(null);
+    mockedUpdateCaseTask.mockResolvedValue(null);
+    mockedDeleteCaseTask.mockResolvedValue(false);
     mockedDownloadCaseAttachment.mockResolvedValue(false);
     mockedUpdateCaseStatus.mockResolvedValue(null);
   });
@@ -260,6 +276,18 @@ describe('App', () => {
     });
     mockedDeleteCaseAttachment.mockResolvedValue(true);
     mockedDownloadCaseAttachment.mockResolvedValue(true);
+    const task = {
+      id: 12,
+      case_id: 3,
+      title: '내용증명 발송',
+      due_date: '2026-07-01',
+      is_completed: false,
+      created_at: '2026-06-14T12:06:00',
+      updated_at: '2026-06-14T12:06:00',
+    };
+    mockedCreateCaseTask.mockResolvedValue(task);
+    mockedUpdateCaseTask.mockResolvedValue({ ...task, is_completed: true, updated_at: '2026-06-14T12:07:00' });
+    mockedDeleteCaseTask.mockResolvedValue(true);
 
     render(<App />);
 
@@ -269,6 +297,17 @@ describe('App', () => {
 
     expect(mockedCreateCase).toHaveBeenCalledWith('임대차 보증금 반환', '01_civil_law');
     expect((await screen.findAllByText('임대차 보증금 반환')).length).toBeGreaterThan(0);
+
+    await userEvent.type(screen.getByLabelText('할 일'), '내용증명 발송');
+    await userEvent.type(screen.getByLabelText('기한'), '2026-07-01');
+    await userEvent.click(screen.getByRole('button', { name: '추가' }));
+
+    expect(mockedCreateCaseTask).toHaveBeenCalledWith(3, '내용증명 발송', '2026-07-01');
+    const taskCheckbox = await screen.findByRole('checkbox', { name: '내용증명 발송' });
+    await userEvent.click(taskCheckbox);
+    expect(mockedUpdateCaseTask).toHaveBeenCalledWith(3, { ...task, is_completed: true });
+    await userEvent.click(screen.getByRole('button', { name: '내용증명 발송 할 일 삭제' }));
+    expect(mockedDeleteCaseTask).toHaveBeenCalledWith(3, 12);
 
     const attachment = new File(['contract body'], 'contract.txt', { type: 'text/plain' });
     await userEvent.upload(screen.getByLabelText('첨부 파일'), attachment);

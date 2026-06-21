@@ -3,21 +3,26 @@ import { clearStoredToken, fetchCurrentUser, login, register, type User } from '
 import {
   createCase,
   createCaseNote,
+  createCaseTask,
   deleteCaseAttachment,
   deleteCaseNote,
+  deleteCaseTask,
   downloadCaseAttachment,
   fetchCaseAttachments,
   fetchCaseNotes,
+  fetchCaseTasks,
   fetchCases,
   generateCaseInsight,
   indexCaseAttachment,
   updateCaseStatus,
   updateCaseNote,
+  updateCaseTask,
   uploadCaseAttachment,
   type CaseAttachment,
   type CaseInsight,
   type CaseNote,
   type CaseStatus,
+  type CaseTask,
   type LegalCase,
 } from './api/cases';
 import {
@@ -101,6 +106,20 @@ function attachmentReference(source: ChatMessage['sources'][number]) {
   };
 }
 
+function sortCaseTasks(tasks: CaseTask[]) {
+  return [...tasks].sort((left, right) => {
+    if (left.is_completed !== right.is_completed) return left.is_completed ? 1 : -1;
+    if (!left.due_date && right.due_date) return 1;
+    if (left.due_date && !right.due_date) return -1;
+    return (left.due_date ?? left.created_at).localeCompare(right.due_date ?? right.created_at);
+  });
+}
+
+function isTaskOverdue(task: CaseTask) {
+  if (!task.due_date || task.is_completed) return false;
+  return task.due_date < new Date().toISOString().slice(0, 10);
+}
+
 export function App() {
   const [message, setMessage] = useState('');
   const [domainCode, setDomainCode] = useState('01_civil_law');
@@ -117,6 +136,7 @@ export function App() {
   const [activeCase, setActiveCase] = useState<LegalCase | null>(null);
   const [caseNotes, setCaseNotes] = useState<CaseNote[]>([]);
   const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
+  const [caseTasks, setCaseTasks] = useState<CaseTask[]>([]);
   const [caseTitle, setCaseTitle] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
   const [caseStatusFilter, setCaseStatusFilter] = useState<'all' | CaseStatus>('all');
@@ -128,6 +148,8 @@ export function App() {
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [indexingAttachmentId, setIndexingAttachmentId] = useState<number | null>(null);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionSearch, setSessionSearch] = useState('');
   const [filterSessionsByCase, setFilterSessionsByCase] = useState(true);
@@ -211,6 +233,7 @@ export function App() {
       setActiveCase(nextCases[0]);
       setCaseNotes(await fetchCaseNotes(nextCases[0].id));
       setCaseAttachments(await fetchCaseAttachments(nextCases[0].id));
+      setCaseTasks(await fetchCaseTasks(nextCases[0].id));
     }
   }
 
@@ -227,6 +250,7 @@ export function App() {
       setCaseInsight(null);
       setCaseNotes(nextCases[0] ? await fetchCaseNotes(nextCases[0].id) : []);
       setCaseAttachments(nextCases[0] ? await fetchCaseAttachments(nextCases[0].id) : []);
+      setCaseTasks(nextCases[0] ? await fetchCaseTasks(nextCases[0].id) : []);
       setSessions(nextSessions);
       if (nextSessions.length > 0) {
         setActiveSession(nextSessions[0]);
@@ -247,6 +271,7 @@ export function App() {
     setActiveCase(null);
     setCaseNotes([]);
     setCaseAttachments([]);
+    setCaseTasks([]);
     setCaseInsight(null);
     setNoteTitle('');
     setNoteContent('');
@@ -316,6 +341,7 @@ export function App() {
     setFilterSessionsByCase(true);
     setCaseNotes(await fetchCaseNotes(legalCase.id));
     setCaseAttachments(await fetchCaseAttachments(legalCase.id));
+    setCaseTasks(await fetchCaseTasks(legalCase.id));
     setChatStatus('사건 노트를 불러왔습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
 
@@ -367,6 +393,7 @@ export function App() {
     setFilterSessionsByCase(true);
     setCaseNotes([]);
     setCaseAttachments([]);
+    setCaseTasks([]);
     setCaseTitle('');
     setChatStatus('사건 노트를 만들었습니다. 새 채팅은 선택된 사건에 연결됩니다.');
   }
@@ -400,6 +427,42 @@ export function App() {
     setEditingNoteId(null);
     setCaseInsight(null);
     setChatStatus(editingNoteId ? '사건 메모를 수정했습니다.' : '사건 메모를 저장했습니다.');
+  }
+
+  async function handleCreateCaseTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeCase || !taskTitle.trim()) return;
+    const task = await createCaseTask(activeCase.id, taskTitle.trim(), taskDueDate);
+    if (!task) {
+      setChatStatus('사건 할 일을 저장하지 못했습니다.');
+      return;
+    }
+    setCaseTasks((items) => sortCaseTasks([...items, task]));
+    setTaskTitle('');
+    setTaskDueDate('');
+    setChatStatus('사건 할 일을 추가했습니다.');
+  }
+
+  async function handleToggleCaseTask(task: CaseTask) {
+    if (!activeCase) return;
+    const updated = await updateCaseTask(activeCase.id, { ...task, is_completed: !task.is_completed });
+    if (!updated) {
+      setChatStatus('사건 할 일 상태를 변경하지 못했습니다.');
+      return;
+    }
+    setCaseTasks((items) => sortCaseTasks(items.map((item) => (item.id === updated.id ? updated : item))));
+    setChatStatus(updated.is_completed ? '사건 할 일을 완료 처리했습니다.' : '사건 할 일을 다시 진행 상태로 변경했습니다.');
+  }
+
+  async function handleDeleteCaseTask(task: CaseTask) {
+    if (!activeCase) return;
+    const deleted = await deleteCaseTask(activeCase.id, task.id);
+    if (!deleted) {
+      setChatStatus('사건 할 일을 삭제하지 못했습니다.');
+      return;
+    }
+    setCaseTasks((items) => items.filter((item) => item.id !== task.id));
+    setChatStatus('사건 할 일을 삭제했습니다.');
   }
 
   function handleEditCaseNote(note: CaseNote) {
@@ -633,6 +696,7 @@ export function App() {
                   setActiveCase(null);
                   setCaseNotes([]);
                   setCaseAttachments([]);
+                  setCaseTasks([]);
                   setCaseInsight(null);
                   setFilterSessionsByCase(true);
                 }}>
@@ -752,6 +816,10 @@ export function App() {
                       <dt>메모</dt>
                       <dd>{caseNotes.length}개</dd>
                     </div>
+                    <div>
+                      <dt>할 일</dt>
+                      <dd>{caseTasks.filter((task) => !task.is_completed).length}개 진행중</dd>
+                    </div>
                     <div className="case-overview-wide">
                       <dt>최근 활동</dt>
                       <dd>{activeCaseActivityAt ? new Date(activeCaseActivityAt).toLocaleString('ko-KR') : '-'}</dd>
@@ -798,6 +866,62 @@ export function App() {
                       </div>
                     ) : (
                       <p className="empty-state">이 사건에 연결된 대화가 없습니다.</p>
+                    )}
+                  </section>
+                  <section className="case-tasks">
+                    <div className="case-task-heading">
+                      <h4>할 일과 기한</h4>
+                      <span>{caseTasks.filter((task) => !task.is_completed).length}개 남음</span>
+                    </div>
+                    <form className="case-task-form" onSubmit={handleCreateCaseTask}>
+                      <label htmlFor="case-task-title">할 일</label>
+                      <input
+                        id="case-task-title"
+                        value={taskTitle}
+                        onChange={(event) => setTaskTitle(event.target.value)}
+                        placeholder="예: 내용증명 발송"
+                      />
+                      <label htmlFor="case-task-due-date">기한</label>
+                      <input
+                        id="case-task-due-date"
+                        type="date"
+                        value={taskDueDate}
+                        onChange={(event) => setTaskDueDate(event.target.value)}
+                      />
+                      <button type="submit">추가</button>
+                    </form>
+                    {caseTasks.length > 0 ? (
+                      <div className="case-task-list">
+                        {caseTasks.map((task) => (
+                          <article
+                            className={`case-task-item${task.is_completed ? ' completed' : ''}${isTaskOverdue(task) ? ' overdue' : ''}`}
+                            key={task.id}
+                          >
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={task.is_completed}
+                                onChange={() => handleToggleCaseTask(task)}
+                              />
+                              <span>{task.title}</span>
+                            </label>
+                            <small>
+                              {task.due_date ? `기한 ${task.due_date}` : '기한 없음'}
+                              {isTaskOverdue(task) ? ' · 기한 초과' : ''}
+                            </small>
+                            <button
+                              type="button"
+                              className="danger-button"
+                              aria-label={`${task.title} 할 일 삭제`}
+                              onClick={() => handleDeleteCaseTask(task)}
+                            >
+                              삭제
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-state">등록된 할 일이 없습니다.</p>
                     )}
                   </section>
                   <section className="case-attachments">

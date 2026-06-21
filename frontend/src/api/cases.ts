@@ -46,6 +46,16 @@ export type CaseAttachment = {
   created_at: string;
 };
 
+export type CaseTask = {
+  id: number;
+  case_id: number;
+  title: string;
+  due_date?: string | null;
+  is_completed: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1',
 });
@@ -146,6 +156,50 @@ export async function fetchCaseAttachments(caseId: number): Promise<CaseAttachme
     return response.data;
   } catch {
     return [];
+  }
+}
+
+export async function fetchCaseTasks(caseId: number): Promise<CaseTask[]> {
+  try {
+    const response = await api.get<CaseTask[]>(`/cases/${caseId}/tasks`, { headers: await getAuthHeaders() });
+    return response.data;
+  } catch {
+    return [];
+  }
+}
+
+export async function createCaseTask(caseId: number, title: string, dueDate?: string): Promise<CaseTask | null> {
+  try {
+    const response = await api.post<CaseTask>(
+      `/cases/${caseId}/tasks`,
+      { title, due_date: dueDate || null },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateCaseTask(caseId: number, task: CaseTask): Promise<CaseTask | null> {
+  try {
+    const response = await api.put<CaseTask>(
+      `/cases/${caseId}/tasks/${task.id}`,
+      { title: task.title, due_date: task.due_date || null, is_completed: task.is_completed },
+      { headers: await getAuthHeaders() },
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCaseTask(caseId: number, taskId: number): Promise<boolean> {
+  try {
+    await api.delete(`/cases/${caseId}/tasks/${taskId}`, { headers: await getAuthHeaders() });
+    return true;
+  } catch {
+    return false;
   }
 }
 

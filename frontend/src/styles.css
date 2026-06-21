@@ -412,17 +412,126 @@ button:disabled {
 
 .case-linked-sessions,
 .case-recent-note,
-.case-attachments {
+.case-attachments,
+.case-tasks {
   display: grid;
   gap: 8px;
 }
 
 .case-linked-sessions h4,
 .case-recent-note h4,
-.case-attachments h4 {
+.case-attachments h4,
+.case-tasks h4 {
   margin: 0;
   color: #172033;
   font-size: 13px;
+}
+
+.case-tasks {
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.case-task-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.case-task-heading span {
+  color: #536174;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.case-task-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px auto;
+  align-items: end;
+  gap: 6px;
+}
+
+.case-task-form label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.case-task-form input,
+.case-task-form button {
+  min-height: 38px;
+}
+
+.case-task-list {
+  display: grid;
+  gap: 6px;
+}
+
+.case-task-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #f7fafc;
+  padding: 8px 10px;
+}
+
+.case-task-item label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.case-task-item input {
+  width: 16px;
+  height: 16px;
+  min-height: auto;
+  flex: 0 0 auto;
+  accent-color: #1f4f46;
+}
+
+.case-task-item span {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.case-task-item small {
+  grid-column: 1;
+  color: #536174;
+  font-size: 12px;
+}
+
+.case-task-item button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  width: auto;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.case-task-item.completed span {
+  color: #758194;
+  text-decoration: line-through;
+}
+
+.case-task-item.overdue {
+  border-color: #e3aaa5;
+  background: #fff7f5;
+}
+
+.case-task-item.overdue small {
+  color: #a23c33;
+  font-weight: 800;
 }
 
 .case-attachment-heading,
@@ -978,7 +1087,8 @@ summary {
   }
 
   .session-item,
-  .chat-form {
+  .chat-form,
+  .case-task-form {
     grid-template-columns: 1fr;
   }
 

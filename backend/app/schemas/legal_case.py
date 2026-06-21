@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -84,3 +85,30 @@ class CaseAttachmentRead(BaseModel):
     vector_status: str
     vector_chunk_count: int = 0
     created_at: str
+
+
+class CaseTaskCreate(BaseModel):
+    """Payload for creating an action item under one legal matter."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    due_date: date | None = None
+
+
+class CaseTaskUpdate(BaseModel):
+    """Full editable state for one legal matter action item."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    due_date: date | None = None
+    is_completed: bool = False
+
+
+class CaseTaskRead(BaseModel):
+    """Stored action item under one legal matter."""
+
+    id: int
+    case_id: int
+    title: str
+    due_date: str | None = None
+    is_completed: bool
+    created_at: str
+    updated_at: str

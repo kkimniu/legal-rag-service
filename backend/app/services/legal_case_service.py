@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.chat import ChatSession
 from app.models.legal_case import CaseAttachment, CaseNote, LegalCase
 from app.core.config import settings
+from app.services.case_task_service import list_case_tasks
 
 
 def create_legal_case(
@@ -283,6 +284,14 @@ def build_case_context(db: Session, legal_case: LegalCase) -> str:
         parts.append("사건 메모:")
         for index, note in enumerate(notes, start=1):
             parts.append(f"[메모 {index}] {note.title}\n{note.content}")
+
+    tasks = list_case_tasks(db, legal_case.id, limit=20)
+    if tasks:
+        parts.append("사건 할 일과 기한:")
+        for index, task in enumerate(tasks, start=1):
+            status = "완료" if task.is_completed else "진행중"
+            due_date = task.due_date.isoformat() if task.due_date else "기한 없음"
+            parts.append(f"[할 일 {index}] {task.title} / {status} / {due_date}")
 
     attachment_context = build_case_attachment_context(db, legal_case.id)
     if attachment_context:

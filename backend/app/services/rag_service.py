@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import re
 from typing import Any
@@ -9,6 +10,31 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from app.core.config import settings
 from app.schemas.rag import RagAskResponse, RagSource
+
+# ── 모듈 수준 싱글턴 캐시 ────────────────────────────────────────────
+_CHROMA_CLIENTS: dict[str, Any] = {}   # persist_dir → PersistentClient
+_EMBED_CACHE: dict[str, list[float]] = {}   # text → embedding (LRU, max 200)
+_HYDE_CACHE: dict[str, str] = {}            # question → hyde_text (LRU, max 100)
+_EMBED_CACHE_MAX = 200
+_HYDE_CACHE_MAX = 100
+
+
+def _get_chroma_client(persist_directory: str) -> Any:
+    """Return a cached PersistentClient; create once per directory path."""
+    if persist_directory not in _CHROMA_CLIENTS:
+        _CHROMA_CLIENTS[persist_directory] = chromadb.PersistentClient(path=persist_directory)
+    return _CHROMA_CLIENTS[persist_directory]
+
+
+def _lru_embed(model: OpenAIEmbeddings, text: str) -> list[float]:
+    """Embed text with a simple LRU dict cache (no extra deps)."""
+    if text in _EMBED_CACHE:
+        return _EMBED_CACHE[text]
+    result = model.embed_query(text)
+    if len(_EMBED_CACHE) >= _EMBED_CACHE_MAX:
+        _EMBED_CACHE.pop(next(iter(_EMBED_CACHE)))
+    _EMBED_CACHE[text] = result
+    return result
 
 
 # 법률 동의어/유사어 사전 — 질문에서 핵심어가 감지되면 검색 쿼리에 관련 용어를 추가해
@@ -325,6 +351,88 @@ class RagService:
 
         return "\n\n".join(sections)
 
+    def _generate_hyde_text(self, question: str) -> str:
+        """HyDE: generate a short hypothetical legal passage to use as the retrieval embedding."""
+        if question in _HYDE_CACHE:
+            return _HYDE_CACHE[question]
+        try:
+            model = ChatOpenAI(
+                model=settings.openai_model,
+                api_key=settings.openai_api_key,
+                temperature=0.3,
+                max_tokens=120,
+            )
+            response = model.invoke([
+                SystemMessage(content="당신은 한국 법률 전문가입니다. 법령 조문·판례 중심의 법률 문서 언어로만 답변하세요."),
+                HumanMessage(content=(
+                    f"다음 질문과 관련된 한국 법령 조문, 법리, 판례 내용을 3~4문장으로 간결하게 서술하세요:\n\n{question}"
+                )),
+            ])
+            text = str(response.content).strip() or question
+        except Exception:
+            text = question
+        if len(_HYDE_CACHE) >= _HYDE_CACHE_MAX:
+            _HYDE_CACHE.pop(next(iter(_HYDE_CACHE)))
+        _HYDE_CACHE[question] = text
+        return text
+
+    def _llm_rerank(self, question: str, sources: list[RagSource], top_k: int) -> list[RagSource]:
+        """Use LLM to pick the most relevant chunks from the candidate pool."""
+        if len(sources) <= top_k:
+            return sources
+        try:
+            model = ChatOpenAI(
+                model=settings.openai_model,
+                api_key=settings.openai_api_key,
+                temperature=0.0,
+                max_tokens=100,
+            )
+            snippets = "\n\n".join(f"[{i + 1}] {s.text[:200]}" for i, s in enumerate(sources))
+            response = model.invoke([
+                SystemMessage(content="당신은 법률 정보 검색 전문가입니다."),
+                HumanMessage(content=(
+                    f"다음 질문에 가장 관련성 높은 법률 근거 {top_k}개를 선택해 번호를 쉼표로 나열하세요.\n\n"
+                    f"질문: {question}\n\n근거:\n{snippets}\n\n"
+                    f"관련성 높은 순서로 {top_k}개 번호만 답하세요 (예: 3,1,7):"
+                )),
+            ])
+            indices: list[int] = []
+            for token in re.findall(r"\d+", str(response.content)):
+                idx = int(token) - 1
+                if 0 <= idx < len(sources) and idx not in indices:
+                    indices.append(idx)
+                if len(indices) >= top_k:
+                    break
+            if not indices:
+                return sources[:top_k]
+            # fill remaining slots in original order so nothing is dropped
+            for i in range(len(sources)):
+                if i not in indices:
+                    indices.append(i)
+                if len(indices) >= top_k:
+                    break
+            return [sources[i] for i in indices[:top_k]]
+        except Exception:
+            return sources[:top_k]
+
+    def _deduplicate_by_text(self, sources: list[RagSource]) -> list[RagSource]:
+        """Remove near-duplicate sources using 4-gram Jaccard similarity (>70% overlap)."""
+        def shingles(text: str) -> set[str]:
+            t = text[:500]
+            return {t[i : i + 4] for i in range(max(0, len(t) - 3))}
+
+        selected: list[RagSource] = []
+        selected_shingles: list[set[str]] = []
+        for source in sources:
+            s = shingles(source.text)
+            if not any(
+                len(s & ss) / (len(s | ss) or 1) > 0.7
+                for ss in selected_shingles
+            ):
+                selected.append(source)
+                selected_shingles.append(s)
+        return selected
+
     def _resolve_chroma_directory(self) -> Path | None:
         candidates = [
             Path(settings.chroma_persist_directory),
@@ -346,31 +454,40 @@ class RagService:
         domain_code: str | None = None,
         case_id: int | None = None,
     ) -> list[RagSource]:
-        client = chromadb.PersistentClient(path=str(persist_directory))
-        embeddings = OpenAIEmbeddings(
+        # ① 싱글턴 ChromaDB 클라이언트 (첫 요청 이후 재사용)
+        client = _get_chroma_client(str(persist_directory))
+        embeddings_model = OpenAIEmbeddings(
             model=settings.openai_embedding_model,
             api_key=settings.openai_api_key,
         )
-        query_embedding = embeddings.embed_query(retrieval_question)
 
-        statute_sources = self._retrieve_collection_sources(
-            client=client,
-            collection_name=settings.chroma_collection_name,
-            evidence_type="statute",
-            query_embedding=query_embedding,
-            question=original_question,
-            domain_code=domain_code,
-            n_results=self.top_k,
-        )
-        precedent_sources = self._retrieve_collection_sources(
-            client=client,
-            collection_name=settings.precedent_chroma_collection_name,
-            evidence_type="precedent",
-            query_embedding=query_embedding,
-            question=original_question,
-            domain_code=domain_code,
-            n_results=self.top_k,
-        )
+        # ② HyDE: 가상 법률 문서를 임베딩 쿼리로 사용 (캐시 적용)
+        if settings.rag_hyde_enabled:
+            hyde_text = self._generate_hyde_text(original_question)
+            query_embedding = _lru_embed(embeddings_model, hyde_text)
+        else:
+            query_embedding = _lru_embed(embeddings_model, retrieval_question)
+
+        n_candidates = settings.rag_retrieve_candidates
+
+        # ③ 3개 컬렉션 쿼리 병렬 실행
+        def _query(collection_name: str, evidence_type: str) -> list[RagSource]:
+            return self._retrieve_collection_sources(
+                client=client,
+                collection_name=collection_name,
+                evidence_type=evidence_type,
+                query_embedding=query_embedding,
+                question=original_question,
+                domain_code=domain_code,
+                n_results=n_candidates,
+            )
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_statute = pool.submit(_query, settings.chroma_collection_name, "statute")
+            f_extra = pool.submit(_query, settings.extra_chroma_collection_name, "statute")
+            f_precedent = pool.submit(_query, settings.precedent_chroma_collection_name, "precedent")
+            statute_sources = self._merge_sources(f_statute.result(), f_extra.result())
+            precedent_sources = f_precedent.result()
 
         attachment_sources = self._retrieve_case_attachment_sources(
             client=client,
@@ -378,11 +495,18 @@ class RagService:
             case_id=case_id,
         )
 
-        return self._merge_sources(
-            statute_sources[: self.top_k],
-            precedent_sources[: self.top_k],
+        combined = self._merge_sources(
+            statute_sources[:n_candidates],
+            precedent_sources[:n_candidates],
             attachment_sources[: self.top_k],
         )
+
+        # ④ 중복 제거 → LLM 리랭킹
+        combined = self._deduplicate_by_text(combined)
+        if settings.rag_rerank_enabled and len(combined) > self.top_k:
+            combined = self._llm_rerank(original_question, combined, self.top_k * 2)
+
+        return combined
 
     def _retrieve_case_attachment_sources(
         self,

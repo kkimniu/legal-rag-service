@@ -41,6 +41,7 @@
 | 컬렉션 | 청크 수 |
 | --- | --- |
 | `legal_chunks_probe` | 101,385 |
+| `legal_chunks_extra` | 75,223 |
 | `precedent_chunks_probe_10k` | 73,414 |
 
 ## 자동 테스트

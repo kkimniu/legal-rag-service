@@ -84,6 +84,10 @@ _LEGAL_SYNONYMS: dict[str, list[str]] = {
     "개인정보": ["개인정보", "개인정보보호법", "정보통신망법", "개인정보침해"],
     "행정심판": ["행정심판", "행정소송", "취소소송", "행정처분"],
     "과태료": ["과태료", "행정처분", "행정법", "이의신청"],
+    "행정처분": ["행정처분", "취소소송", "행정소송", "처분취소", "행정심판", "행정법원"],
+    "인허가": ["인허가", "허가", "인가", "거부처분", "허가취소", "행정처분", "행정소송"],
+    "정보공개": ["정보공개", "정보공개청구", "정보공개법", "비공개결정", "공공기관", "행정심판"],
+    "취소소송": ["취소소송", "행정소송", "행정처분", "행정법원", "처분취소", "행정심판"],
 }
 
 
@@ -360,7 +364,7 @@ class RagService:
                 model=settings.openai_model,
                 api_key=settings.openai_api_key,
                 temperature=0.3,
-                max_tokens=120,
+                max_tokens=80,
             )
             response = model.invoke([
                 SystemMessage(content="당신은 한국 법률 전문가입니다. 법령 조문·판례 중심의 법률 문서 언어로만 답변하세요."),
@@ -385,9 +389,9 @@ class RagService:
                 model=settings.openai_model,
                 api_key=settings.openai_api_key,
                 temperature=0.0,
-                max_tokens=100,
+                max_tokens=60,
             )
-            snippets = "\n\n".join(f"[{i + 1}] {s.text[:200]}" for i, s in enumerate(sources))
+            snippets = "\n\n".join(f"[{i + 1}] {s.text[:150]}" for i, s in enumerate(sources))
             response = model.invoke([
                 SystemMessage(content="당신은 법률 정보 검색 전문가입니다."),
                 HumanMessage(content=(
@@ -446,6 +450,11 @@ class RagService:
                 return resolved
         return None
 
+    def _has_sufficient_legal_terms(self, question: str) -> bool:
+        """Return True when question already contains 2+ direct legal synonym keys."""
+        keywords = self._extract_keywords(question)
+        return sum(1 for k in keywords if k in _LEGAL_SYNONYMS) >= 2
+
     def _retrieve_sources(
         self,
         retrieval_question: str,
@@ -461,8 +470,8 @@ class RagService:
             api_key=settings.openai_api_key,
         )
 
-        # ② HyDE: 가상 법률 문서를 임베딩 쿼리로 사용 (캐시 적용)
-        if settings.rag_hyde_enabled:
+        # ② HyDE: 질문에 법률 키워드가 충분하면 스킵 (2-3s 절약)
+        if settings.rag_hyde_enabled and not self._has_sufficient_legal_terms(original_question):
             hyde_text = self._generate_hyde_text(original_question)
             query_embedding = _lru_embed(embeddings_model, hyde_text)
         else:
@@ -580,10 +589,10 @@ class RagService:
         # 원본 키워드 우선, 확장 용어를 뒤에 추가해 검색 대상을 넓힌다.
         search_terms = keywords + [t for t in expanded if t not in keywords]
 
-        for term in search_terms[:8]:
+        for term in search_terms[:5]:
             query_kwargs: dict[str, Any] = {
                 "query_embeddings": [query_embedding],
-                "n_results": min(3, self.top_k),
+                "n_results": min(2, self.top_k),
                 "where_document": {"$contains": term},
                 "include": ["documents", "metadatas", "distances"],
             }

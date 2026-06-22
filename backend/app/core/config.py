@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     extra_chroma_collection_name: str = "legal_chunks_extra"
     precedent_chroma_collection_name: str = "precedent_chunks_probe_10k"
     rag_top_k: int = 7
-    rag_retrieve_candidates: int = 15
+    rag_retrieve_candidates: int = 10
     rag_hyde_enabled: bool = True
     rag_rerank_enabled: bool = True
     rag_context_max_chars: int = 8000

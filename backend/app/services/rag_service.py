@@ -1,7 +1,9 @@
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 from pathlib import Path
 import re
+import time
 from typing import Any
 
 import chromadb
@@ -19,11 +21,63 @@ _EMBED_CACHE_MAX = 200
 _HYDE_CACHE_MAX = 100
 
 
+_log = logging.getLogger(__name__)
+
+# text-embedding-3-small outputs 1536-dim vectors
+_EMBED_DIM = 1536
+
+
 def _get_chroma_client(persist_directory: str) -> Any:
     """Return a cached PersistentClient; create once per directory path."""
     if persist_directory not in _CHROMA_CLIENTS:
         _CHROMA_CLIENTS[persist_directory] = chromadb.PersistentClient(path=persist_directory)
     return _CHROMA_CLIENTS[persist_directory]
+
+
+def _resolve_chroma_dir() -> Path | None:
+    """Return the first existing ChromaDB persist directory, or None."""
+    candidates = [
+        Path(settings.chroma_persist_directory),
+        Path(__file__).resolve().parents[3] / settings.chroma_persist_directory,
+        Path(__file__).resolve().parents[3] / "chroma_db",
+    ]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def prewarm_chromadb() -> None:
+    """Load HNSW indices for all collections at startup to eliminate cold-start delay.
+
+    Intended to run in a daemon thread via the FastAPI lifespan hook.
+    Uses a zero-vector dummy query — triggers index loading without an API call.
+    """
+    persist_dir = _resolve_chroma_dir()
+    if persist_dir is None:
+        _log.warning("[prewarm] ChromaDB directory not found — skipping")
+        return
+
+    client = _get_chroma_client(str(persist_dir))
+    dummy = [0.0] * _EMBED_DIM
+
+    collection_names = [
+        settings.chroma_collection_name,
+        settings.extra_chroma_collection_name,
+        settings.precedent_chroma_collection_name,
+    ]
+
+    t0 = time.perf_counter()
+    _log.info("[prewarm] starting ChromaDB preload (%d collections)", len(collection_names))
+    for name in collection_names:
+        try:
+            col = client.get_collection(name)
+            col.query(query_embeddings=[dummy], n_results=1)
+            _log.info("[prewarm] %-40s loaded  %.1fs", name, time.perf_counter() - t0)
+        except Exception as exc:
+            _log.warning("[prewarm] %s failed: %s", name, exc)
+    _log.info("[prewarm] done in %.1fs — first user query will be fast", time.perf_counter() - t0)
 
 
 def _lru_embed(model: OpenAIEmbeddings, text: str) -> list[float]:
@@ -438,17 +492,7 @@ class RagService:
         return selected
 
     def _resolve_chroma_directory(self) -> Path | None:
-        candidates = [
-            Path(settings.chroma_persist_directory),
-            Path(__file__).resolve().parents[3] / settings.chroma_persist_directory,
-            Path(__file__).resolve().parents[3] / "chroma_db",
-        ]
-
-        for candidate in candidates:
-            resolved = candidate.resolve()
-            if resolved.exists():
-                return resolved
-        return None
+        return _resolve_chroma_dir()
 
     def _has_sufficient_legal_terms(self, question: str) -> bool:
         """Return True when question already contains 2+ direct legal synonym keys."""

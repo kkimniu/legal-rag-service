@@ -434,44 +434,28 @@ class RagService:
         _HYDE_CACHE[question] = text
         return text
 
-    def _llm_rerank(self, question: str, sources: list[RagSource], top_k: int) -> list[RagSource]:
-        """Use LLM to pick the most relevant chunks from the candidate pool."""
+    def _score_rerank(self, question: str, sources: list[RagSource], top_k: int) -> list[RagSource]:
+        """Rerank by ChromaDB distance + keyword overlap — no LLM call needed.
+
+        score = 0.7 * distance_relevance + 0.3 * keyword_hit_rate
+        distance_relevance = 1 - min(l2_distance / 2.0, 1.0)   (higher is better)
+        keyword_hit_rate   = matched_keywords / total_keywords   (higher is better)
+        """
         if len(sources) <= top_k:
             return sources
-        try:
-            model = ChatOpenAI(
-                model=settings.openai_model,
-                api_key=settings.openai_api_key,
-                temperature=0.0,
-                max_tokens=60,
-            )
-            snippets = "\n\n".join(f"[{i + 1}] {s.text[:150]}" for i, s in enumerate(sources))
-            response = model.invoke([
-                SystemMessage(content="당신은 법률 정보 검색 전문가입니다."),
-                HumanMessage(content=(
-                    f"다음 질문에 가장 관련성 높은 법률 근거 {top_k}개를 선택해 번호를 쉼표로 나열하세요.\n\n"
-                    f"질문: {question}\n\n근거:\n{snippets}\n\n"
-                    f"관련성 높은 순서로 {top_k}개 번호만 답하세요 (예: 3,1,7):"
-                )),
-            ])
-            indices: list[int] = []
-            for token in re.findall(r"\d+", str(response.content)):
-                idx = int(token) - 1
-                if 0 <= idx < len(sources) and idx not in indices:
-                    indices.append(idx)
-                if len(indices) >= top_k:
-                    break
-            if not indices:
-                return sources[:top_k]
-            # fill remaining slots in original order so nothing is dropped
-            for i in range(len(sources)):
-                if i not in indices:
-                    indices.append(i)
-                if len(indices) >= top_k:
-                    break
-            return [sources[i] for i in indices[:top_k]]
-        except Exception:
-            return sources[:top_k]
+        keywords = self._extract_keywords(question)
+
+        def _rank(source: RagSource) -> float:
+            dist = source.score if source.score is not None else 1.0
+            dist_score = 1.0 - min(dist / 2.0, 1.0)
+            if keywords:
+                text_lower = source.text.lower()
+                kw_score = sum(1 for k in keywords if k in text_lower) / len(keywords)
+            else:
+                kw_score = 0.0
+            return 0.7 * dist_score + 0.3 * kw_score
+
+        return sorted(sources, key=_rank, reverse=True)[:top_k]
 
     def _deduplicate_by_text(self, sources: list[RagSource]) -> list[RagSource]:
         """Remove near-duplicate sources using 4-gram Jaccard similarity (>70% overlap)."""
@@ -495,9 +479,9 @@ class RagService:
         return _resolve_chroma_dir()
 
     def _has_sufficient_legal_terms(self, question: str) -> bool:
-        """Return True when question already contains 2+ direct legal synonym keys."""
+        """Return True when question contains any direct legal synonym key."""
         keywords = self._extract_keywords(question)
-        return sum(1 for k in keywords if k in _LEGAL_SYNONYMS) >= 2
+        return any(k in _LEGAL_SYNONYMS for k in keywords)
 
     def _retrieve_sources(
         self,
@@ -557,7 +541,7 @@ class RagService:
         # ④ 중복 제거 → LLM 리랭킹
         combined = self._deduplicate_by_text(combined)
         if settings.rag_rerank_enabled and len(combined) > self.top_k:
-            combined = self._llm_rerank(original_question, combined, self.top_k * 2)
+            combined = self._score_rerank(original_question, combined, self.top_k * 2)
 
         return combined
 

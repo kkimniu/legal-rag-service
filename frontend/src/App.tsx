@@ -1,5 +1,5 @@
 import React, { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
-import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
+import { clearStoredToken, fetchCurrentUser, login, loginAsGuest, register, type User } from './api/auth';
 import {
   createCase,
   createCaseNote,
@@ -313,6 +313,7 @@ export function App() {
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const filteredSessions = sessions.filter((session) => {
@@ -424,6 +425,17 @@ export function App() {
         setMessages([]);
       }
       setChatStatus('대화방을 선택하거나 새 대화를 시작하세요.');
+    }
+  }
+
+  async function handleGuestLogin() {
+    setAuthMessage('게스트 계정을 생성하는 중...');
+    const result = await loginAsGuest();
+    setAuthMessage(result.message);
+    if (result.user) {
+      setCurrentUser(result.user);
+      setSessions([]);
+      setChatStatus('게스트 모드입니다. 새 대화를 시작하세요.');
     }
   }
 
@@ -903,6 +915,28 @@ export function App() {
     setTimeout(() => setCopiedMessageId((prev) => (prev === id ? null : prev)), 2000);
   }
 
+  function handleExportChat() {
+    if (!activeSession || messages.length === 0) return;
+    const lines = [
+      `# ${activeSession.title}`,
+      `날짜: ${new Date(activeSession.created_at).toLocaleString('ko-KR')}`,
+      `분야: ${domainLabel(activeSession.domain_code)}`,
+      '',
+      ...messages.map((msg) => {
+        const role = msg.role === 'user' ? '사용자' : 'AI';
+        const time = new Date(msg.created_at).toLocaleString('ko-KR');
+        return `[${role}] (${time})\n${msg.content}`;
+      }),
+    ];
+    const blob = new Blob([lines.join('\n\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeSession.title.replace(/[\\/:*?"<>|]/g, '_')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleRegenerate() {
     if (!activeSession || isLoading) return;
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
@@ -990,8 +1024,10 @@ export function App() {
 
   return (
     <main className="app-shell">
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
       <section className="chat-layout">
-        <aside className="sidebar">
+        <aside className={sidebarOpen ? 'sidebar sidebar-open' : 'sidebar'}>
+          <button type="button" className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} aria-label="사이드바 닫기">✕</button>
           <div className="brand-block">
             <p className="eyebrow">Legal RAG Service</p>
             <h1>법률 챗봇</h1>
@@ -1000,27 +1036,35 @@ export function App() {
           <section className="auth-panel" aria-label="인증">
             {currentUser ? (
               <div className="user-summary">
-                <span>{currentUser.email}</span>
+                <span>{currentUser.is_guest ? '게스트' : currentUser.email}</span>
+                {currentUser.is_guest && (
+                  <span className="guest-badge">게스트 모드</span>
+                )}
                 <button type="button" className="secondary-button" onClick={handleLogout}>
-                  로그아웃
+                  {currentUser.is_guest ? '종료' : '로그아웃'}
                 </button>
               </div>
             ) : (
-              <form className="auth-form" onSubmit={handleAuthSubmit}>
-                <div className="auth-tabs" role="tablist" aria-label="인증 모드">
-                  <button type="button" className={authMode === 'login' ? 'active-tab' : ''} onClick={() => setAuthMode('login')}>
-                    로그인
-                  </button>
-                  <button type="button" className={authMode === 'register' ? 'active-tab' : ''} onClick={() => setAuthMode('register')}>
-                    회원가입
-                  </button>
-                </div>
-                <label htmlFor="email">이메일</label>
-                <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-                <label htmlFor="password">비밀번호</label>
-                <input id="password" type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} />
-                <button type="submit">{authMode === 'login' ? '로그인' : '가입하기'}</button>
-              </form>
+              <>
+                <form className="auth-form" onSubmit={handleAuthSubmit}>
+                  <div className="auth-tabs" role="tablist" aria-label="인증 모드">
+                    <button type="button" className={authMode === 'login' ? 'active-tab' : ''} onClick={() => setAuthMode('login')}>
+                      로그인
+                    </button>
+                    <button type="button" className={authMode === 'register' ? 'active-tab' : ''} onClick={() => setAuthMode('register')}>
+                      회원가입
+                    </button>
+                  </div>
+                  <label htmlFor="email">이메일</label>
+                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+                  <label htmlFor="password">비밀번호</label>
+                  <input id="password" type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} />
+                  <button type="submit">{authMode === 'login' ? '로그인' : '가입하기'}</button>
+                </form>
+                <button type="button" className="guest-login-btn" onClick={handleGuestLogin}>
+                  게스트로 시작하기
+                </button>
+              </>
             )}
             <p className="auth-message">{authMessage}</p>
           </section>
@@ -1692,7 +1736,13 @@ export function App() {
         <section className="chat-panel" aria-label="챗봇">
           <header className="chat-header">
             <div>
-              <h2>{activeSession?.title ?? '새 채팅'}</h2>
+              <div className="chat-title-row">
+                <button type="button" className="sidebar-toggle-btn" onClick={() => setSidebarOpen((s) => !s)} aria-label="메뉴 열기/닫기">☰</button>
+                <h2>{activeSession?.title ?? '새 채팅'}</h2>
+                {activeSession && messages.length > 0 && (
+                  <button type="button" className="export-chat-btn" onClick={handleExportChat} title="대화 내용을 텍스트 파일로 저장">⬇ 내보내기</button>
+                )}
+              </div>
               <p>
                 {activeSession
                   ? `${domainLabel(activeSession.domain_code)} 대화 · ${chatStatus}`

@@ -1,6 +1,9 @@
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 from pathlib import Path
 import re
+import time
 from typing import Any
 
 import chromadb
@@ -9,6 +12,83 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from app.core.config import settings
 from app.schemas.rag import RagAskResponse, RagSource
+
+# ── 모듈 수준 싱글턴 캐시 ────────────────────────────────────────────
+_CHROMA_CLIENTS: dict[str, Any] = {}   # persist_dir → PersistentClient
+_EMBED_CACHE: dict[str, list[float]] = {}   # text → embedding (LRU, max 200)
+_HYDE_CACHE: dict[str, str] = {}            # question → hyde_text (LRU, max 100)
+_EMBED_CACHE_MAX = 200
+_HYDE_CACHE_MAX = 100
+
+
+_log = logging.getLogger(__name__)
+
+# text-embedding-3-small outputs 1536-dim vectors
+_EMBED_DIM = 1536
+
+
+def _get_chroma_client(persist_directory: str) -> Any:
+    """Return a cached PersistentClient; create once per directory path."""
+    if persist_directory not in _CHROMA_CLIENTS:
+        _CHROMA_CLIENTS[persist_directory] = chromadb.PersistentClient(path=persist_directory)
+    return _CHROMA_CLIENTS[persist_directory]
+
+
+def _resolve_chroma_dir() -> Path | None:
+    """Return the first existing ChromaDB persist directory, or None."""
+    candidates = [
+        Path(settings.chroma_persist_directory),
+        Path(__file__).resolve().parents[3] / settings.chroma_persist_directory,
+        Path(__file__).resolve().parents[3] / "chroma_db",
+    ]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def prewarm_chromadb() -> None:
+    """Load HNSW indices for all collections at startup to eliminate cold-start delay.
+
+    Intended to run in a daemon thread via the FastAPI lifespan hook.
+    Uses a zero-vector dummy query — triggers index loading without an API call.
+    """
+    persist_dir = _resolve_chroma_dir()
+    if persist_dir is None:
+        _log.warning("[prewarm] ChromaDB directory not found — skipping")
+        return
+
+    client = _get_chroma_client(str(persist_dir))
+    dummy = [0.0] * _EMBED_DIM
+
+    collection_names = [
+        settings.chroma_collection_name,
+        settings.extra_chroma_collection_name,
+        settings.precedent_chroma_collection_name,
+    ]
+
+    t0 = time.perf_counter()
+    _log.info("[prewarm] starting ChromaDB preload (%d collections)", len(collection_names))
+    for name in collection_names:
+        try:
+            col = client.get_collection(name)
+            col.query(query_embeddings=[dummy], n_results=1)
+            _log.info("[prewarm] %-40s loaded  %.1fs", name, time.perf_counter() - t0)
+        except Exception as exc:
+            _log.warning("[prewarm] %s failed: %s", name, exc)
+    _log.info("[prewarm] done in %.1fs — first user query will be fast", time.perf_counter() - t0)
+
+
+def _lru_embed(model: OpenAIEmbeddings, text: str) -> list[float]:
+    """Embed text with a simple LRU dict cache (no extra deps)."""
+    if text in _EMBED_CACHE:
+        return _EMBED_CACHE[text]
+    result = model.embed_query(text)
+    if len(_EMBED_CACHE) >= _EMBED_CACHE_MAX:
+        _EMBED_CACHE.pop(next(iter(_EMBED_CACHE)))
+    _EMBED_CACHE[text] = result
+    return result
 
 
 # 법률 동의어/유사어 사전 — 질문에서 핵심어가 감지되면 검색 쿼리에 관련 용어를 추가해
@@ -58,6 +138,10 @@ _LEGAL_SYNONYMS: dict[str, list[str]] = {
     "개인정보": ["개인정보", "개인정보보호법", "정보통신망법", "개인정보침해"],
     "행정심판": ["행정심판", "행정소송", "취소소송", "행정처분"],
     "과태료": ["과태료", "행정처분", "행정법", "이의신청"],
+    "행정처분": ["행정처분", "취소소송", "행정소송", "처분취소", "행정심판", "행정법원"],
+    "인허가": ["인허가", "허가", "인가", "거부처분", "허가취소", "행정처분", "행정소송"],
+    "정보공개": ["정보공개", "정보공개청구", "정보공개법", "비공개결정", "공공기관", "행정심판"],
+    "취소소송": ["취소소송", "행정소송", "행정처분", "행정법원", "처분취소", "행정심판"],
 }
 
 
@@ -221,6 +305,7 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
+            max_tokens=settings.rag_answer_max_tokens,
         )
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])
@@ -325,18 +410,79 @@ class RagService:
 
         return "\n\n".join(sections)
 
-    def _resolve_chroma_directory(self) -> Path | None:
-        candidates = [
-            Path(settings.chroma_persist_directory),
-            Path(__file__).resolve().parents[3] / settings.chroma_persist_directory,
-            Path(__file__).resolve().parents[3] / "chroma_db",
-        ]
+    def _generate_hyde_text(self, question: str) -> str:
+        """HyDE: generate a short hypothetical legal passage to use as the retrieval embedding."""
+        if question in _HYDE_CACHE:
+            return _HYDE_CACHE[question]
+        try:
+            model = ChatOpenAI(
+                model=settings.openai_model,
+                api_key=settings.openai_api_key,
+                temperature=0.3,
+                max_tokens=80,
+            )
+            response = model.invoke([
+                SystemMessage(content="당신은 한국 법률 전문가입니다. 법령 조문·판례 중심의 법률 문서 언어로만 답변하세요."),
+                HumanMessage(content=(
+                    f"다음 질문과 관련된 한국 법령 조문, 법리, 판례 내용을 3~4문장으로 간결하게 서술하세요:\n\n{question}"
+                )),
+            ])
+            text = str(response.content).strip() or question
+        except Exception:
+            text = question
+        if len(_HYDE_CACHE) >= _HYDE_CACHE_MAX:
+            _HYDE_CACHE.pop(next(iter(_HYDE_CACHE)))
+        _HYDE_CACHE[question] = text
+        return text
 
-        for candidate in candidates:
-            resolved = candidate.resolve()
-            if resolved.exists():
-                return resolved
-        return None
+    def _score_rerank(self, question: str, sources: list[RagSource], top_k: int) -> list[RagSource]:
+        """Rerank by ChromaDB distance + keyword overlap — no LLM call needed.
+
+        score = 0.7 * distance_relevance + 0.3 * keyword_hit_rate
+        distance_relevance = 1 - min(l2_distance / 2.0, 1.0)   (higher is better)
+        keyword_hit_rate   = matched_keywords / total_keywords   (higher is better)
+        """
+        if len(sources) <= top_k:
+            return sources
+        keywords = self._extract_keywords(question)
+
+        def _rank(source: RagSource) -> float:
+            dist = source.score if source.score is not None else 1.0
+            dist_score = 1.0 - min(dist / 2.0, 1.0)
+            if keywords:
+                text_lower = source.text.lower()
+                kw_score = sum(1 for k in keywords if k in text_lower) / len(keywords)
+            else:
+                kw_score = 0.0
+            return 0.7 * dist_score + 0.3 * kw_score
+
+        return sorted(sources, key=_rank, reverse=True)[:top_k]
+
+    def _deduplicate_by_text(self, sources: list[RagSource]) -> list[RagSource]:
+        """Remove near-duplicate sources using 4-gram Jaccard similarity (>70% overlap)."""
+        def shingles(text: str) -> set[str]:
+            t = text[:500]
+            return {t[i : i + 4] for i in range(max(0, len(t) - 3))}
+
+        selected: list[RagSource] = []
+        selected_shingles: list[set[str]] = []
+        for source in sources:
+            s = shingles(source.text)
+            if not any(
+                len(s & ss) / (len(s | ss) or 1) > 0.7
+                for ss in selected_shingles
+            ):
+                selected.append(source)
+                selected_shingles.append(s)
+        return selected
+
+    def _resolve_chroma_directory(self) -> Path | None:
+        return _resolve_chroma_dir()
+
+    def _has_sufficient_legal_terms(self, question: str) -> bool:
+        """Return True when question contains any direct legal synonym key."""
+        keywords = self._extract_keywords(question)
+        return any(k in _LEGAL_SYNONYMS for k in keywords)
 
     def _retrieve_sources(
         self,
@@ -346,31 +492,40 @@ class RagService:
         domain_code: str | None = None,
         case_id: int | None = None,
     ) -> list[RagSource]:
-        client = chromadb.PersistentClient(path=str(persist_directory))
-        embeddings = OpenAIEmbeddings(
+        # ① 싱글턴 ChromaDB 클라이언트 (첫 요청 이후 재사용)
+        client = _get_chroma_client(str(persist_directory))
+        embeddings_model = OpenAIEmbeddings(
             model=settings.openai_embedding_model,
             api_key=settings.openai_api_key,
         )
-        query_embedding = embeddings.embed_query(retrieval_question)
 
-        statute_sources = self._retrieve_collection_sources(
-            client=client,
-            collection_name=settings.chroma_collection_name,
-            evidence_type="statute",
-            query_embedding=query_embedding,
-            question=original_question,
-            domain_code=domain_code,
-            n_results=self.top_k,
-        )
-        precedent_sources = self._retrieve_collection_sources(
-            client=client,
-            collection_name=settings.precedent_chroma_collection_name,
-            evidence_type="precedent",
-            query_embedding=query_embedding,
-            question=original_question,
-            domain_code=domain_code,
-            n_results=self.top_k,
-        )
+        # ② HyDE: 질문에 법률 키워드가 충분하면 스킵 (2-3s 절약)
+        if settings.rag_hyde_enabled and not self._has_sufficient_legal_terms(original_question):
+            hyde_text = self._generate_hyde_text(original_question)
+            query_embedding = _lru_embed(embeddings_model, hyde_text)
+        else:
+            query_embedding = _lru_embed(embeddings_model, retrieval_question)
+
+        n_candidates = settings.rag_retrieve_candidates
+
+        # ③ 3개 컬렉션 쿼리 병렬 실행
+        def _query(collection_name: str, evidence_type: str) -> list[RagSource]:
+            return self._retrieve_collection_sources(
+                client=client,
+                collection_name=collection_name,
+                evidence_type=evidence_type,
+                query_embedding=query_embedding,
+                question=original_question,
+                domain_code=domain_code,
+                n_results=n_candidates,
+            )
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_statute = pool.submit(_query, settings.chroma_collection_name, "statute")
+            f_extra = pool.submit(_query, settings.extra_chroma_collection_name, "statute")
+            f_precedent = pool.submit(_query, settings.precedent_chroma_collection_name, "precedent")
+            statute_sources = self._merge_sources(f_statute.result(), f_extra.result())
+            precedent_sources = f_precedent.result()
 
         attachment_sources = self._retrieve_case_attachment_sources(
             client=client,
@@ -378,11 +533,18 @@ class RagService:
             case_id=case_id,
         )
 
-        return self._merge_sources(
-            statute_sources[: self.top_k],
-            precedent_sources[: self.top_k],
+        combined = self._merge_sources(
+            statute_sources[:n_candidates],
+            precedent_sources[:n_candidates],
             attachment_sources[: self.top_k],
         )
+
+        # ④ 중복 제거 → LLM 리랭킹
+        combined = self._deduplicate_by_text(combined)
+        if settings.rag_rerank_enabled and len(combined) > self.top_k:
+            combined = self._score_rerank(original_question, combined, self.top_k * 2)
+
+        return combined
 
     def _retrieve_case_attachment_sources(
         self,
@@ -456,10 +618,10 @@ class RagService:
         # 원본 키워드 우선, 확장 용어를 뒤에 추가해 검색 대상을 넓힌다.
         search_terms = keywords + [t for t in expanded if t not in keywords]
 
-        for term in search_terms[:8]:
+        for term in search_terms[:5]:
             query_kwargs: dict[str, Any] = {
                 "query_embeddings": [query_embedding],
-                "n_results": min(3, self.top_k),
+                "n_results": min(2, self.top_k),
                 "where_document": {"$contains": term},
                 "include": ["documents", "metadatas", "distances"],
             }
@@ -596,6 +758,7 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
+            max_tokens=settings.rag_answer_max_tokens,
         )
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])

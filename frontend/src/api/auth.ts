@@ -11,6 +11,7 @@ export type User = {
   id: number;
   email: string;
   is_active: boolean;
+  is_guest?: boolean;
 };
 
 export type AuthResult = {
@@ -96,6 +97,31 @@ export async function login(email: string, password: string): Promise<AuthResult
       token: null,
       refreshToken: null,
       message: '로그인에 실패했습니다. 이메일, 비밀번호, DB 상태를 확인해주세요.',
+    };
+  }
+}
+
+export async function loginAsGuest(): Promise<AuthResult> {
+  try {
+    const tokenResponse = await api.post<{ access_token: string; token_type: string }>('/auth/guest');
+    storeToken(tokenResponse.data.access_token);
+
+    const userResponse = await api.get<User>('/auth/me', {
+      headers: { Authorization: `Bearer ${tokenResponse.data.access_token}` },
+    });
+
+    return {
+      user: userResponse.data,
+      token: tokenResponse.data.access_token,
+      refreshToken: null,
+      message: '게스트로 시작합니다. 대화 내용은 세션 종료 시 삭제됩니다.',
+    };
+  } catch {
+    return {
+      user: null,
+      token: null,
+      refreshToken: null,
+      message: '게스트 로그인에 실패했습니다.',
     };
   }
 }

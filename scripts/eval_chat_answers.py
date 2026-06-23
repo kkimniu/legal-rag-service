@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
+
+import requests as _requests
 
 
 DEFAULT_BASE_URL = "http://localhost:8000/api/v1"
@@ -105,37 +105,32 @@ def request_json(
     headers: dict[str, str] | None = None,
     timeout: int = 180,
 ) -> tuple[int, Any]:
-    data = None
     req_headers = headers.copy() if headers else {}
-    if payload is not None:
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req_headers["Content-Type"] = "application/json"
-
-    req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8")
-            return resp.status, json.loads(body) if body else None
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
+        resp = _requests.request(
+            method,
+            url,
+            json=payload,
+            headers=req_headers,
+            timeout=timeout,
+        )
+        body = resp.text
         try:
-            parsed = json.loads(body) if body else None
+            return resp.status_code, json.loads(body) if body else None
         except json.JSONDecodeError:
-            parsed = body
-        return exc.code, parsed
+            return resp.status_code, body
+    except _requests.exceptions.RequestException as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def login(base_url: str, email: str, password: str) -> str:
-    data = urllib.parse.urlencode({"username": email, "password": password}).encode()
-    req = urllib.request.Request(
+    resp = _requests.post(
         f"{base_url}/auth/login",
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
+        data={"username": email, "password": password},
+        timeout=60,
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-    return str(body["access_token"])
+    resp.raise_for_status()
+    return str(resp.json()["access_token"])
 
 
 def setup_auth(base_url: str, email: str, password: str) -> str:

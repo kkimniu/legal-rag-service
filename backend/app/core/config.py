@@ -26,9 +26,14 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "legal_chunks"
+    extra_chroma_collection_name: str = "legal_chunks_extra"
     precedent_chroma_collection_name: str = "precedent_chunks_probe_10k"
     rag_top_k: int = 7
+    rag_retrieve_candidates: int = 10
+    rag_hyde_enabled: bool = True
+    rag_rerank_enabled: bool = True
     rag_context_max_chars: int = 8000
+    rag_answer_max_tokens: int = 800
     rag_case_context_max_chars: int = 2500
     rag_max_source_distance: float = 1.25
     rag_min_reliable_sources: int = 1

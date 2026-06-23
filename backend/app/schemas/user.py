@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
 
 class UserCreate(BaseModel):
@@ -16,6 +16,11 @@ class UserRead(BaseModel):
     id: int
     email: EmailStr
     is_active: bool
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def is_guest(self) -> bool:
+        return str(self.email).endswith("@guest.local")
 
 
 class Token(BaseModel):

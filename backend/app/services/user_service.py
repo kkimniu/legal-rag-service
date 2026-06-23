@@ -1,3 +1,6 @@
+import secrets
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,6 +24,20 @@ def create_user(db: Session, payload: UserCreate) -> User:
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def create_guest_user(db: Session) -> User:
+    """Create a one-time anonymous guest user and return it with a JWT-ready record."""
+    short_id = uuid.uuid4().hex[:12]
+    user = User(
+        email=f"guest_{short_id}@guest.local",
+        hashed_password=hash_password(secrets.token_urlsafe(32)),
         is_active=True,
     )
     db.add(user)

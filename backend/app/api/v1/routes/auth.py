@@ -9,7 +9,7 @@ from app.core.security import create_access_token, create_refresh_token, decode_
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import RefreshTokenRequest, Token, UserCreate, UserRead
-from app.services.user_service import authenticate_user, create_user, get_user_by_email, get_user_by_id
+from app.services.user_service import authenticate_user, create_guest_user, create_user, get_user_by_email, get_user_by_id
 
 router = APIRouter()
 
@@ -75,6 +75,17 @@ def refresh_token(
     return Token(
         access_token=create_access_token(subject=subject),
         refresh_token=create_refresh_token(subject=subject),
+    )
+
+
+@router.post("/guest", response_model=Token, status_code=status.HTTP_201_CREATED)
+def login_as_guest(db: Session = Depends(get_db)) -> Token:
+    """Create a one-time anonymous guest account and return a JWT."""
+    user = create_guest_user(db)
+    subject = str(user.id)
+    return Token(
+        access_token=create_access_token(subject=subject),
+        refresh_token=None,
     )
 
 

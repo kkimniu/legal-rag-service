@@ -1,5 +1,5 @@
 import React, { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
-import { clearStoredToken, fetchCurrentUser, login, register, type User } from './api/auth';
+import { clearStoredToken, fetchCurrentUser, login, loginAsGuest, register, type User } from './api/auth';
 import {
   createCase,
   createCaseNote,
@@ -425,6 +425,17 @@ export function App() {
         setMessages([]);
       }
       setChatStatus('대화방을 선택하거나 새 대화를 시작하세요.');
+    }
+  }
+
+  async function handleGuestLogin() {
+    setAuthMessage('게스트 계정을 생성하는 중...');
+    const result = await loginAsGuest();
+    setAuthMessage(result.message);
+    if (result.user) {
+      setCurrentUser(result.user);
+      setSessions([]);
+      setChatStatus('게스트 모드입니다. 새 대화를 시작하세요.');
     }
   }
 
@@ -1025,27 +1036,35 @@ export function App() {
           <section className="auth-panel" aria-label="인증">
             {currentUser ? (
               <div className="user-summary">
-                <span>{currentUser.email}</span>
+                <span>{currentUser.is_guest ? '게스트' : currentUser.email}</span>
+                {currentUser.is_guest && (
+                  <span className="guest-badge">게스트 모드</span>
+                )}
                 <button type="button" className="secondary-button" onClick={handleLogout}>
-                  로그아웃
+                  {currentUser.is_guest ? '종료' : '로그아웃'}
                 </button>
               </div>
             ) : (
-              <form className="auth-form" onSubmit={handleAuthSubmit}>
-                <div className="auth-tabs" role="tablist" aria-label="인증 모드">
-                  <button type="button" className={authMode === 'login' ? 'active-tab' : ''} onClick={() => setAuthMode('login')}>
-                    로그인
-                  </button>
-                  <button type="button" className={authMode === 'register' ? 'active-tab' : ''} onClick={() => setAuthMode('register')}>
-                    회원가입
-                  </button>
-                </div>
-                <label htmlFor="email">이메일</label>
-                <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-                <label htmlFor="password">비밀번호</label>
-                <input id="password" type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} />
-                <button type="submit">{authMode === 'login' ? '로그인' : '가입하기'}</button>
-              </form>
+              <>
+                <form className="auth-form" onSubmit={handleAuthSubmit}>
+                  <div className="auth-tabs" role="tablist" aria-label="인증 모드">
+                    <button type="button" className={authMode === 'login' ? 'active-tab' : ''} onClick={() => setAuthMode('login')}>
+                      로그인
+                    </button>
+                    <button type="button" className={authMode === 'register' ? 'active-tab' : ''} onClick={() => setAuthMode('register')}>
+                      회원가입
+                    </button>
+                  </div>
+                  <label htmlFor="email">이메일</label>
+                  <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+                  <label htmlFor="password">비밀번호</label>
+                  <input id="password" type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} />
+                  <button type="submit">{authMode === 'login' ? '로그인' : '가입하기'}</button>
+                </form>
+                <button type="button" className="guest-login-btn" onClick={handleGuestLogin}>
+                  게스트로 시작하기
+                </button>
+              </>
             )}
             <p className="auth-message">{authMessage}</p>
           </section>

@@ -1508,6 +1508,35 @@ summary {
   background: #eef2f6;
 }
 
+.guest-login-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 0;
+  background: transparent;
+  border: 1px dashed #94a3b8;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.guest-login-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.guest-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 @media (max-width: 940px) {
   .chat-layout {
     grid-template-columns: 1fr;

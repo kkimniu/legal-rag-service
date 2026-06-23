@@ -45,7 +45,7 @@ import {
   type ChatMessage,
   type ChatSession,
 } from './api/chat';
-import { searchPersonalWorkspace, type PersonalSearchResult, type SearchTypeFilter } from './api/search';
+import { searchLegal, searchPersonalWorkspace, type LegalSearchResult, type PersonalSearchResult, type SearchTypeFilter } from './api/search';
 
 const domainOptions = [
   { value: '', label: '전체 분야' },
@@ -228,6 +228,7 @@ const SEARCH_TYPE_LABELS: Record<PersonalSearchResult['result_type'], string> = 
 
 const SEARCH_TYPE_FILTERS: Array<{ value: SearchTypeFilter; label: string }> = [
   { value: 'all', label: '전체' },
+  { value: 'law', label: '법령·판례' },
   { value: 'case', label: '사건' },
   { value: 'note', label: '메모' },
   { value: 'task', label: '할 일' },
@@ -308,6 +309,7 @@ export function App() {
   const [workspaceSearch, setWorkspaceSearch] = useState('');
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<PersonalSearchResult[]>([]);
   const [workspaceSearchTotalCount, setWorkspaceSearchTotalCount] = useState(0);
+  const [legalSearchResults, setLegalSearchResults] = useState<LegalSearchResult[]>([]);
   const [searchTypeFilter, setSearchTypeFilter] = useState<SearchTypeFilter>('all');
   const [searchVisibleCount, setSearchVisibleCount] = useState(SEARCH_PAGE_SIZE);
   const [isWorkspaceSearching, setIsWorkspaceSearching] = useState(false);
@@ -481,13 +483,18 @@ export function App() {
     if (query.length < 2) {
       setWorkspaceSearchResults([]);
       setWorkspaceSearchTotalCount(0);
+      setLegalSearchResults([]);
       return;
     }
     setIsWorkspaceSearching(true);
     setSearchVisibleCount(SEARCH_PAGE_SIZE);
-    const { results, totalCount } = await searchPersonalWorkspace(query, searchTypeFilter);
-    setWorkspaceSearchResults(results);
-    setWorkspaceSearchTotalCount(totalCount);
+    const [personal, legal] = await Promise.all([
+      searchPersonalWorkspace(query, searchTypeFilter === 'law' ? 'all' : searchTypeFilter),
+      searchLegal(query, 10),
+    ]);
+    setWorkspaceSearchResults(personal.results);
+    setWorkspaceSearchTotalCount(personal.totalCount);
+    setLegalSearchResults(legal.results);
     setIsWorkspaceSearching(false);
   }
 
@@ -496,9 +503,14 @@ export function App() {
     setSearchVisibleCount(SEARCH_PAGE_SIZE);
     if (workspaceSearch.trim().length < 2) return;
     setIsWorkspaceSearching(true);
-    const { results, totalCount } = await searchPersonalWorkspace(workspaceSearch.trim(), type);
-    setWorkspaceSearchResults(results);
-    setWorkspaceSearchTotalCount(totalCount);
+    const q = workspaceSearch.trim();
+    const [personal, legal] = await Promise.all([
+      searchPersonalWorkspace(q, type === 'law' ? 'all' : type),
+      searchLegal(q, 10),
+    ]);
+    setWorkspaceSearchResults(personal.results);
+    setWorkspaceSearchTotalCount(personal.totalCount);
+    setLegalSearchResults(legal.results);
     setIsWorkspaceSearching(false);
   }
 
@@ -1106,7 +1118,7 @@ export function App() {
                   </button>
                 </div>
               </form>
-              {(workspaceSearchResults.length > 0 || workspaceSearchTotalCount > 0) && (
+              {(workspaceSearchResults.length > 0 || workspaceSearchTotalCount > 0 || legalSearchResults.length > 0) && (
                 <div className="workspace-search-results" aria-label="통합 검색 결과">
                   <div className="search-filter-chips" role="group" aria-label="유형 필터">
                     {SEARCH_TYPE_FILTERS.map(({ value, label }) => (
@@ -1120,32 +1132,55 @@ export function App() {
                       </button>
                     ))}
                   </div>
-                  <p className="search-count">
-                    총 {workspaceSearchTotalCount}건
-                    {workspaceSearchTotalCount > searchVisibleCount && ` (${searchVisibleCount}건 표시 중)`}
-                  </p>
-                  {workspaceSearchResults.slice(0, searchVisibleCount).map((result) => (
-                    <button
-                      type="button"
-                      key={`${result.result_type}-${result.id}`}
-                      onClick={() => handleSelectSearchResult(result)}
-                    >
-                      <span>{searchResultTypeLabel(result.result_type)}</span>
-                      <strong>{highlightQuery(result.title, workspaceSearch)}</strong>
-                      <p>{highlightQuery(result.snippet, workspaceSearch)}</p>
-                    </button>
-                  ))}
-                  {searchVisibleCount < workspaceSearchResults.length && (
-                    <button
-                      type="button"
-                      className="search-load-more"
-                      onClick={() => setSearchVisibleCount((n) => n + SEARCH_PAGE_SIZE)}
-                    >
-                      더 보기 ({workspaceSearchResults.length - searchVisibleCount}건 남음)
-                    </button>
+
+                  {/* 법령·판례 결과 */}
+                  {(searchTypeFilter === 'all' || searchTypeFilter === 'law') && legalSearchResults.length > 0 && (
+                    <>
+                      <p className="search-section-label">법령·판례 {legalSearchResults.length}건</p>
+                      {legalSearchResults.map((result) => (
+                        <div key={result.id} className="legal-search-result">
+                          <span className={result.evidence_type === 'precedent' ? 'precedent-badge' : 'statute-badge'}>
+                            {result.evidence_type === 'precedent' ? '판례' : '법령'}
+                          </span>
+                          {result.domain_name && <span className="legal-result-domain">{result.domain_name}</span>}
+                          <strong>{result.title ?? '제목 없음'}</strong>
+                          <p>{highlightQuery(result.snippet, workspaceSearch)}</p>
+                        </div>
+                      ))}
+                    </>
                   )}
-                  {workspaceSearchResults.length === 0 && (
-                    <p className="empty-state">검색 결과가 없습니다.</p>
+
+                  {/* 워크스페이스 결과 */}
+                  {searchTypeFilter !== 'law' && (
+                    <>
+                      <p className="search-section-label">
+                        내 워크스페이스 {workspaceSearchTotalCount}건
+                        {workspaceSearchTotalCount > searchVisibleCount && ` (${searchVisibleCount}건 표시 중)`}
+                      </p>
+                      {workspaceSearchResults.slice(0, searchVisibleCount).map((result) => (
+                        <button
+                          type="button"
+                          key={`${result.result_type}-${result.id}`}
+                          onClick={() => handleSelectSearchResult(result)}
+                        >
+                          <span>{searchResultTypeLabel(result.result_type)}</span>
+                          <strong>{highlightQuery(result.title, workspaceSearch)}</strong>
+                          <p>{highlightQuery(result.snippet, workspaceSearch)}</p>
+                        </button>
+                      ))}
+                      {searchVisibleCount < workspaceSearchResults.length && (
+                        <button
+                          type="button"
+                          className="search-load-more"
+                          onClick={() => setSearchVisibleCount((n) => n + SEARCH_PAGE_SIZE)}
+                        >
+                          더 보기 ({workspaceSearchResults.length - searchVisibleCount}건 남음)
+                        </button>
+                      )}
+                      {workspaceSearchResults.length === 0 && legalSearchResults.length === 0 && (
+                        <p className="empty-state">검색 결과가 없습니다.</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1811,7 +1846,7 @@ export function App() {
                     </details>
                   )}
                   {item.sources.length > 0 && (
-                    <details>
+                    <details open>
                       <summary>검색 근거 {item.sources.length}개</summary>
                       <div className="sources-list">
                         {item.sources.map((source, index) => {
@@ -1821,13 +1856,16 @@ export function App() {
                           const sourceEvidenceLabel = evidenceLabel(source);
                           const sourceCaseNumber = caseNumber(source);
                           const sourceAttachment = attachmentReference(source);
+                          const similarity = source.score !== null && source.score !== undefined
+                            ? Math.max(0, Math.min(1, 1 - source.score / 2))
+                            : null;
                           return (
                             <section className="source-item" key={sourceKey}>
                               <div className="source-meta">
                                 <span className={evidenceBadgeClass(source)}>
-                                  {sourceEvidenceLabel} 근거 {index + 1}
+                                  {sourceEvidenceLabel} {index + 1}
                                 </span>
-                                <span>{source.domain_name ?? '분야 미상'}</span>
+                                <span className="source-domain">{source.domain_name ?? '분야 미상'}</span>
                                 {sourceCaseNumber && (
                                   <a
                                     href={`https://glaw.scourt.go.kr/wsjo/panre/sjo060.do?q=${encodeURIComponent(sourceCaseNumber)}`}
@@ -1838,8 +1876,14 @@ export function App() {
                                     {sourceCaseNumber}
                                   </a>
                                 )}
-                                {source.score !== null && source.score !== undefined && (
-                                  <span>유사도 {(1 - source.score).toFixed(3)}</span>
+                                {similarity !== null && (
+                                  <span className="source-score" title={`유사도 ${(similarity * 100).toFixed(0)}%`}>
+                                    <span
+                                      className="score-bar"
+                                      style={{ '--score': similarity } as React.CSSProperties}
+                                    />
+                                    {(similarity * 100).toFixed(0)}%
+                                  </span>
                                 )}
                               </div>
                               <h3>{source.title ?? '제목 없음'}</h3>

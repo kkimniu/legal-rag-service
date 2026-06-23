@@ -19,3 +19,20 @@ class PersonalSearchResponse(BaseModel):
     query: str
     results: list[PersonalSearchResult]
     total_count: int = 0
+
+
+class LegalSearchResult(BaseModel):
+    """One chunk from the legal knowledge base."""
+
+    id: str
+    title: str | None = None
+    domain_name: str | None = None
+    evidence_type: str
+    snippet: str
+    score: float | None = None
+
+
+class LegalSearchResponse(BaseModel):
+    query: str
+    results: list[LegalSearchResult]
+    total_count: int = 0

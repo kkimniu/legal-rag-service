@@ -32,6 +32,14 @@ def create_user(db: Session, payload: UserCreate) -> User:
     return user
 
 
+def delete_stale_guest_users(db: Session) -> int:
+    """Delete all guest accounts — they cannot log back in, so cleanup is safe at startup."""
+    from sqlalchemy import delete as sa_delete
+    result = db.execute(sa_delete(User).where(User.email.like("%@guest.local")))
+    db.commit()
+    return result.rowcount
+
+
 def create_guest_user(db: Session) -> User:
     """Create a one-time anonymous guest user and return it with a JWT-ready record."""
     short_id = uuid.uuid4().hex[:12]

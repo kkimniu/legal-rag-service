@@ -32,6 +32,7 @@ frontend/.vite/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 .envrc
 
 # Local databases, vector stores, and generated AI artifacts

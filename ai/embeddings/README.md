@@ -37,18 +37,6 @@ API 호출 없이 chunk 입력과 metadata 변환만 검증합니다.
 .\.venv\Scripts\python.exe ai\preprocessing\chunk_documents.py --input data\processed\legal_documents.civil.000000.jsonl --output data\chunks\legal_chunks.civil.000000.jsonl
 ```
 
-색인 전에 token 수, 예상 비용, 최소 실행 시간을 추정합니다.
-
-```powershell
-.\.venv\Scripts\python.exe ai\embeddings\estimate_index_size.py --input data\chunks\legal_chunks.civil.000000.jsonl --output data\processed\index_estimate.civil.000000.json
-```
-
-중간 샘플 통계와 원본 파일 수를 기준으로 전체 색인 규모를 projection합니다.
-
-```powershell
-.\.venv\Scripts\python.exe ai\embeddings\project_full_index.py --output data\processed\index_projection.full.json
-```
-
 처음에는 작은 배치 파일로 dry run을 실행해 입력을 확인합니다.
 
 ```powershell

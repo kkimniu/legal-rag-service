@@ -1,9 +1,4 @@
-{
-	# Let's Encrypt 인증서 발급에 사용할 이메일 (실제 이메일로 변경)
-	email admin@YOUR_DOMAIN
-}
-
-YOUR_DOMAIN {
+:80 {
 	encode gzip
 
 	# API 요청 → 백엔드

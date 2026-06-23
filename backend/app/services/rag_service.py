@@ -305,6 +305,7 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
+            max_tokens=settings.rag_answer_max_tokens,
         )
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])
@@ -757,6 +758,7 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
+            max_tokens=settings.rag_answer_max_tokens,
         )
         context = self._format_context(sources)
         conversation_context = self._format_chat_history(chat_history or [])

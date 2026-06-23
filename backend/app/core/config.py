@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     rag_hyde_enabled: bool = True
     rag_rerank_enabled: bool = True
     rag_context_max_chars: int = 8000
+    rag_answer_max_tokens: int = 800
     rag_case_context_max_chars: int = 2500
     rag_max_source_distance: float = 1.25
     rag_min_reliable_sources: int = 1

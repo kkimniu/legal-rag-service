@@ -1,7 +1,19 @@
 :80 {
 	encode gzip
 
-	# API 요청 → 백엔드
+	# 스트리밍 SSE 엔드포인트 — 버퍼링 없이 즉시 flush
+	handle /api/*/messages/stream {
+		reverse_proxy backend:8000 {
+			flush_interval -1
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 60s
+				read_buffer_size 4096
+			}
+		}
+	}
+
+	# 나머지 API 요청 → 백엔드
 	handle /api/* {
 		reverse_proxy backend:8000
 	}

@@ -305,55 +305,16 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
-            max_tokens=settings.rag_answer_max_tokens,
+            max_tokens=self._answer_mode_max_tokens(answer_mode),
         )
-        context = self._format_context(sources)
-        conversation_context = self._format_chat_history(chat_history or [])
-        mode_instruction = self._answer_mode_instruction(answer_mode)
-        evidence_warning_text = self._format_evidence_warnings(evidence_warnings or [])
-        personal_case_context = self._format_case_context(case_context)
-        messages = [
-            SystemMessage(
-                content=(
-                    "당신은 한국 법률 상담을 돕는 AI 어시스턴트입니다. "
-                    "반드시 제공된 법률 근거와 판례 근거 안에서만 답변하세요. "
-                    "근거에 없는 법률요건, 판례 취지, 법적 결론은 절대 추측하지 말고 "
-                    "근거 부족임을 명확히 밝히세요.\n\n"
-                    "답변 원칙:\n"
-                    "1. 검색된 근거에 없는 내용은 '근거 없음'으로 명시\n"
-                    "2. 조문 번호(예: 민법 제750조)와 판례 사건번호를 정확히 인용\n"
-                    "3. 법률 용어는 정확하게 사용하되 일반인이 이해할 수 있도록 설명 추가\n"
-                    "4. 사실관계가 불명확할 때는 판단 유보 후 확인 필요 사항 제시\n"
-                    "5. 이 답변은 법률 자문이 아닌 참고 정보임을 반드시 명시\n\n"
-                    "답변 형식 (반드시 준수):\n"
-                    "답변 요약\n"
-                    "[핵심 결론을 2~4문장으로 요약]\n\n"
-                    "관련 법령\n"
-                    "- 법령명 및 조문: ...\n"
-                    "- 적용 근거: ...\n\n"
-                    "관련 판례\n"
-                    "- 사건번호: ...\n"
-                    "- 법원/선고일: ...\n"
-                    "- 판결 요지: ...\n\n"
-                    "주의사항\n"
-                    "[한계, 추가 확인 필요 사항, 전문가 상담 권고]"
-                )
-            ),
-            HumanMessage(
-                content=(
-                    f"최근 대화\n{conversation_context}\n\n"
-                    f"개인 사건 메모\n{personal_case_context}\n\n"
-                    f"답변 모드\n{mode_instruction}\n\n"
-                    f"근거 품질 경고\n{evidence_warning_text}\n\n"
-                    f"질문:\n{question}\n\n"
-                    f"검색된 근거:\n{context}\n\n"
-                    "위 검색된 근거만 사용해서 한국어로 답변하세요. "
-                    "관련 판례가 없으면 '관련 판례\\n- 검색된 판례 근거가 부족합니다.'라고 쓰세요. "
-                    "관련 법령이 없으면 '관련 법령\\n- 검색된 법령 근거가 부족합니다.'라고 쓰세요. "
-                    "근거에 없는 내용을 임의로 추가하지 마세요."
-                )
-            ),
-        ]
+        messages = self._build_messages(
+            question=question,
+            sources=sources,
+            chat_history=chat_history or [],
+            answer_mode=answer_mode,
+            evidence_warnings=evidence_warnings or [],
+            case_context=case_context,
+        )
         for chunk in model.stream(messages):
             content = chunk.content
             if content:
@@ -758,57 +719,17 @@ class RagService:
             model=settings.openai_model,
             api_key=settings.openai_api_key,
             temperature=settings.openai_temperature,
-            max_tokens=settings.rag_answer_max_tokens,
+            max_tokens=self._answer_mode_max_tokens(answer_mode),
         )
-        context = self._format_context(sources)
-        conversation_context = self._format_chat_history(chat_history or [])
-        mode_instruction = self._answer_mode_instruction(answer_mode)
-        evidence_warning_text = self._format_evidence_warnings(evidence_warnings or [])
-        personal_case_context = self._format_case_context(case_context)
-        response = model.invoke(
-            [
-                SystemMessage(
-                    content=(
-                        "당신은 한국 법률 상담을 돕는 AI 어시스턴트입니다. "
-                        "반드시 제공된 법률 근거와 판례 근거 안에서만 답변하세요. "
-                        "근거에 없는 법률요건, 판례 취지, 법적 결론은 절대 추측하지 말고 "
-                        "근거 부족임을 명확히 밝히세요.\n\n"
-                        "답변 원칙:\n"
-                        "1. 검색된 근거에 없는 내용은 '근거 없음'으로 명시\n"
-                        "2. 조문 번호(예: 민법 제750조)와 판례 사건번호를 정확히 인용\n"
-                        "3. 법률 용어는 정확하게 사용하되 일반인이 이해할 수 있도록 설명 추가\n"
-                        "4. 사실관계가 불명확할 때는 판단 유보 후 확인 필요 사항 제시\n"
-                        "5. 이 답변은 법률 자문이 아닌 참고 정보임을 반드시 명시\n\n"
-                        "답변 형식 (반드시 준수):\n"
-                        "답변 요약\n"
-                        "[핵심 결론을 2~4문장으로 요약]\n\n"
-                        "관련 법령\n"
-                        "- 법령명 및 조문: ...\n"
-                        "- 적용 근거: ...\n\n"
-                        "관련 판례\n"
-                        "- 사건번호: ...\n"
-                        "- 법원/선고일: ...\n"
-                        "- 판결 요지: ...\n\n"
-                        "주의사항\n"
-                        "[한계, 추가 확인 필요 사항, 전문가 상담 권고]"
-                    )
-                ),
-                HumanMessage(
-                    content=(
-                        f"최근 대화\n{conversation_context}\n\n"
-                        f"개인 사건 메모\n{personal_case_context}\n\n"
-                        f"답변 모드\n{mode_instruction}\n\n"
-                        f"근거 품질 경고\n{evidence_warning_text}\n\n"
-                        f"질문:\n{question}\n\n"
-                        f"검색된 근거:\n{context}\n\n"
-                        "위 검색된 근거만 사용해서 한국어로 답변하세요. "
-                        "관련 판례가 없으면 '관련 판례\\n- 검색된 판례 근거가 부족합니다.'라고 쓰세요. "
-                        "관련 법령이 없으면 '관련 법령\\n- 검색된 법령 근거가 부족합니다.'라고 쓰세요. "
-                        "근거에 없는 내용을 임의로 추가하지 마세요."
-                    )
-                ),
-            ]
+        messages = self._build_messages(
+            question=question,
+            sources=sources,
+            chat_history=chat_history or [],
+            answer_mode=answer_mode,
+            evidence_warnings=evidence_warnings or [],
+            case_context=case_context,
         )
+        response = model.invoke(messages)
         answer = str(response.content).strip()
         disclaimer = "이 답변은 검색된 법률/판례 데이터에 기반한 참고 정보이며, 구체적인 사건에는 전문가 상담이 필요할 수 있습니다."
         has_notice = (
@@ -820,26 +741,134 @@ class RagService:
             answer = f"{answer}\n\n{disclaimer}"
         return answer
 
+    def _build_messages(
+        self,
+        question: str,
+        sources: list[RagSource],
+        chat_history: list[tuple[str, str]],
+        answer_mode: str,
+        evidence_warnings: list[str],
+        case_context: str | None,
+    ) -> list:
+        context = self._format_context(sources)
+        conversation_context = self._format_chat_history(chat_history)
+        evidence_warning_text = self._format_evidence_warnings(evidence_warnings)
+        personal_case_context = self._format_case_context(case_context)
+        format_instruction = self._answer_mode_instruction(answer_mode)
+        return [
+            SystemMessage(
+                content=(
+                    "당신은 한국 법률 상담을 돕는 AI 어시스턴트입니다. "
+                    "반드시 제공된 법률 근거와 판례 근거 안에서만 답변하세요. "
+                    "근거에 없는 법률요건, 판례 취지, 법적 결론은 절대 추측하지 말고 "
+                    "근거 부족임을 명확히 밝히세요.\n\n"
+                    "답변 원칙:\n"
+                    "1. 검색된 근거에 없는 내용은 '근거 없음'으로 명시\n"
+                    "2. 조문 번호(예: 민법 제750조)와 판례 사건번호를 정확히 인용\n"
+                    "3. 법률 용어는 정확하게 사용하되 일반인이 이해할 수 있도록 설명 추가\n"
+                    "4. 사실관계가 불명확할 때는 판단 유보 후 확인 필요 사항 제시\n"
+                    "5. 이 답변은 법률 자문이 아닌 참고 정보임을 반드시 명시"
+                )
+            ),
+            HumanMessage(
+                content=(
+                    f"최근 대화\n{conversation_context}\n\n"
+                    f"개인 사건 메모\n{personal_case_context}\n\n"
+                    f"근거 품질 경고\n{evidence_warning_text}\n\n"
+                    f"질문:\n{question}\n\n"
+                    f"검색된 근거:\n{context}\n\n"
+                    f"{format_instruction}"
+                )
+            ),
+        ]
+
+    def _answer_mode_max_tokens(self, answer_mode: str) -> int:
+        return {
+            "brief": 700,
+            "general": 1400,
+            "detailed": 2200,
+            "issue": 2000,
+            "consultation": 1800,
+        }.get(answer_mode, 1400)
+
     def _answer_mode_instruction(self, answer_mode: str) -> str:
         instructions = {
             "brief": (
-                "간단 답변 모드입니다. 핵심 결론을 먼저 말하고 관련 법령과 판례는 가장 중요한 근거만 짧게 정리하세요. "
-                "불필요한 배경 설명은 줄이세요."
+                "위 검색된 근거만 사용해서 한국어로 간결하게 답변하세요.\n\n"
+                "형식:\n"
+                "핵심 결론\n"
+                "[2~3문장으로 요약]\n\n"
+                "주요 근거\n"
+                "- 가장 중요한 법령 1~2개 인용\n"
+                "- 가장 관련된 판례 1개 인용 (없으면 생략)\n\n"
+                "주의사항\n"
+                "[전문가 상담 권고 한 줄]"
             ),
             "detailed": (
-                "상세 검토 모드입니다. 사실관계, 법령, 판례, 적용 가능성, 한계를 차례대로 설명하세요. "
-                "근거가 부족한 부분은 명확히 구분하세요."
+                "위 검색된 근거만 사용해서 한국어로 상세하게 분석하세요.\n\n"
+                "형식:\n"
+                "답변 요약\n"
+                "[핵심 결론 2~4문장]\n\n"
+                "법적 분석\n"
+                "[사실관계 적용, 법령 해석, 판례 분석 상세 설명]\n\n"
+                "관련 법령\n"
+                "- 법령명 및 조문: ...\n"
+                "- 적용 근거: ...\n\n"
+                "관련 판례\n"
+                "- 사건번호: ...\n"
+                "- 법원/선고일: ...\n"
+                "- 판결 요지: ...\n\n"
+                "한계 및 주의사항\n"
+                "[근거 한계, 추가 확인 필요 사항, 전문가 상담 권고]"
             ),
             "issue": (
-                "쟁점 정리 모드입니다. 질문에서 문제되는 법적 쟁점을 항목별로 나누고, "
-                "각 쟁점마다 관련 법령과 판례를 연결하세요. "
-                "마지막에 추가로 확인할 사실을 제안하세요."
+                "위 검색된 근거만 사용해서 한국어로 쟁점별로 정리하세요.\n\n"
+                "형식:\n"
+                "쟁점 개요\n"
+                "[주요 법적 쟁점 1~3개 제시]\n\n"
+                "쟁점 1: [제목]\n"
+                "- 관련 법령: ...\n"
+                "- 관련 판례: ...\n"
+                "- 검토: ...\n\n"
+                "쟁점 2: [제목] (해당 시)\n"
+                "- ...\n\n"
+                "추가 확인 사항\n"
+                "- 사실관계에서 더 확인이 필요한 점\n\n"
+                "주의사항\n"
+                "[전문가 상담 권고]"
             ),
             "consultation": (
-                "상담 준비 모드입니다. 전문가 상담 전에 준비해야 할 자료, 확인 질문, 위험 요소를 중심으로 정리하세요. "
-                "답변은 법률 자문이 아니라 상담 준비용 참고 정보임을 분명히 하세요."
+                "위 검색된 근거만 사용해서 한국어로 전문가 상담 준비 자료를 정리하세요.\n\n"
+                "형식:\n"
+                "상황 요약\n"
+                "[현재 상황의 법적 의미 2~3문장]\n\n"
+                "준비할 서류 및 증거\n"
+                "- ...\n\n"
+                "전문가에게 확인할 질문\n"
+                "- ...\n\n"
+                "주요 법적 쟁점\n"
+                "- 관련 법령: ...\n"
+                "- 관련 판례: ...\n\n"
+                "주의사항\n"
+                "[법률 자문이 아닌 참고 정보, 전문가 상담 강조]"
             ),
-            "general": "기본 답변 모드입니다. 질문에 직접 답하고 관련 법령과 판례를 균형 있게 정리하세요.",
+            "general": (
+                "위 검색된 근거만 사용해서 한국어로 답변하세요.\n\n"
+                "형식:\n"
+                "답변 요약\n"
+                "[핵심 결론을 2~4문장으로 요약]\n\n"
+                "관련 법령\n"
+                "- 법령명 및 조문: ...\n"
+                "- 적용 근거: ...\n\n"
+                "관련 판례\n"
+                "- 사건번호: ...\n"
+                "- 법원/선고일: ...\n"
+                "- 판결 요지: ...\n\n"
+                "주의사항\n"
+                "[한계, 추가 확인 필요 사항, 전문가 상담 권고]\n\n"
+                "관련 판례가 없으면 '관련 판례\\n- 검색된 판례 근거가 부족합니다.'라고 쓰세요. "
+                "관련 법령이 없으면 '관련 법령\\n- 검색된 법령 근거가 부족합니다.'라고 쓰세요."
+            ),
         }
         return instructions.get(answer_mode, instructions["general"])
 
